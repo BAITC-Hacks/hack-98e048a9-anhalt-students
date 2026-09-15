@@ -22,3 +22,11 @@ git clone https://github.com/fastapi/full-stack-fastapi-template.git hackalem-ba
 
 # 3. Interactive Agentic RAG Scaffolding (TypeScript or Python)
 npx create-llama@latest
+https://github.com/Panniantong/agent-reach
+https://github.com/unslothai/unsloth
+https://github.com/virgiliojr94/book-to-skill
+https://github.com/ayghri/i-have-adhd
+https://github.com/k-dense-ai/scientific-agent-skills
+https://github.com/leonxlnx/taste-skill
+https://github.com/nexu-io/open-design
+(https://playwright.dev/agent-cli/introduction)

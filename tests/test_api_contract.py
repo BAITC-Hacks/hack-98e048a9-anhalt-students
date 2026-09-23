@@ -49,6 +49,9 @@ class StubPipeline:
     def run_full_february_simulation(self, turbine_id):
         return {"turbine_id": turbine_id}
 
+    def reload_data_and_retrain(self):
+        return {"retrained": True, "data_source": "USER_SUPPLIED_VERIFIED"}
+
 
 @pytest.fixture
 def api(monkeypatch):
@@ -159,3 +162,36 @@ def test_cli_overrides_environment_and_validates_port(monkeypatch):
             main.main(["--port", invalid])
         assert exc.value.code == 2
     assert len(calls) == 1
+
+
+def test_upload_scada_valid_csv(api, tmp_path, monkeypatch):
+    import backend.agent.data_loader as dl
+    monkeypatch.setattr(dl, "DATA_DIR", str(tmp_path))
+    client, _ = api
+    dates = pd.date_range("2025-01-01", periods=24, freq="h")
+    csv_content = "time,normalized_power,temperature_2m,wind_speed_10m\n" + "\n".join(
+        f"{d.isoformat()},0.55,-5.0,7.2" for d in dates
+    )
+    files = {"file": ("test_scada.csv", io.BytesIO(csv_content.encode("utf-8")), "text/csv")}
+    response = client.post("/api/upload/scada", files=files)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "SUCCESS"
+    assert data["rows_count"] == 24
+    assert data["data_source"] == "USER_SUPPLIED_VERIFIED"
+    assert data["mean_normalized_power"] == 0.55
+
+
+def test_upload_scada_invalid_extension(api):
+    client, _ = api
+    files = {"file": ("test.txt", io.BytesIO(b"some,data"), "text/plain")}
+    response = client.post("/api/upload/scada", files=files)
+    assert response.status_code == 422
+
+
+def test_upload_scada_invalid_content(api):
+    client, _ = api
+    files = {"file": ("test.csv", io.BytesIO(b"bad,csv,data\n1,2,3"), "text/csv")}
+    response = client.post("/api/upload/scada", files=files)
+    assert response.status_code == 422
+

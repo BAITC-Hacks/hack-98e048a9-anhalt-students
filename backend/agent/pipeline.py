@@ -213,7 +213,22 @@ class SamrukWindAgentPipeline:
                           "status": result["audit"]["agent_status"], "events_count": len(result["audit"]["events"]),
                           "data_source": result["benchmark"]["data_provenance"]}
         total = sum(day["generation_mwh"] for day in days.values())
+        storm_days = [d for d, val in days.items() if val["status"] == "CRITICAL_SHUTDOWN"]
+        advisory_days = [d for d, val in days.items() if val["status"] == "ADVISORY_ATTENTION"]
         return {"month": "February 2026", "turbine_id": turbine_id, "total_days": 28,
                 "total_monthly_mwh": round(total, 2), "total_physics_mwh": round(sum(day["physics_mwh"] for day in days.values()), 2),
-                "mean_daily_mwh": round(total / 28, 2), "daily_breakdown": days,
+                "mean_daily_mwh": round(total / 28, 2),
+                "storm_shutdown_days": storm_days,
+                "advisory_days": advisory_days,
+                "daily_breakdown": days,
                 "evaluation_status": "RETROSPECTIVE_SCENARIO_NOT_ACCURACY_BACKTEST", "forecast_issue_time_verified": False}
+
+    def reload_data_and_retrain(self):
+        """Thread-safe reload of historical SCADA dataset and LightGBM model retraining."""
+        with self._lock:
+            self.history = get_or_create_historical_data()
+            self.training_metadata = self.model.train(self.history, cutoff="2026-02-01")
+            self._training_cutoff = pd.Timestamp("2026-02-01")
+            self._runs.clear()
+            return self.training_metadata
+

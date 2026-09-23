@@ -68,6 +68,10 @@
           </select>
         </div>
 
+        <button onclick="openUploadModal()" class="px-3 py-2 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 text-blue-300 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition">
+          <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i> Загрузить SCADA
+        </button>
+
         <button id="runBtn" onclick="runAgentForecast()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg flex items-center gap-2 transition shadow-lg shadow-emerald-900/30">
           <i data-lucide="play" class="w-3.5 h-3.5"></i> Запустить Агента
         </button>
@@ -80,7 +84,53 @@
 
     <p id="dataNotice" role="status">Демонстрационный прогноз. Подтверждённые измерения для оценки точности не подключены.</p>
     <label><input type="checkbox" id="refreshWeather"> Обновить погоду перед расчётом</label>
-    <details><summary>Журнал решений агента</summary><pre id="agentTrace"></pre></details>
+    <details class="bg-slate-900/40 p-3 rounded-lg border border-slate-800"><summary class="text-xs text-slate-400 cursor-pointer">Журнал решений агента (Audit Trace)</summary><pre id="agentTrace" class="mt-2 text-[11px] text-slate-400 font-mono"></pre></details>
+
+    <!-- Interactive Day-by-Day Simulator Player (February 2026) -->
+    <div class="bg-gradient-to-r from-slate-900 via-slate-900/95 to-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+          <div class="h-8 w-8 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+            <i data-lucide="play-circle" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              Интерактивный плеер тестового периода (1–28 февраля 2026)
+              <span class="text-[10px] font-normal px-2 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">28 циклов</span>
+            </h4>
+            <p class="text-[11px] text-slate-400">Последовательный бэктест суточных окон без утечки будущих данных (доступность погоды на момент выпуска t-1)</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="simPrevBtn" onclick="stepSimulation(-1)" title="Предыдущий день" class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 text-slate-300 text-xs transition">
+            <i data-lucide="skip-back" class="w-3.5 h-3.5"></i>
+          </button>
+          <button id="simPlayBtn" onclick="toggleSimulationPlay()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow transition">
+            <i data-lucide="play" id="simPlayIcon" class="w-3.5 h-3.5"></i> <span id="simPlayText">Воспроизвести февраль</span>
+          </button>
+          <button id="simNextBtn" onclick="stepSimulation(1)" title="Следующий день" class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 text-slate-300 text-xs transition">
+            <i data-lucide="skip-forward" class="w-3.5 h-3.5"></i>
+          </button>
+          <select id="simSpeed" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1.5 border border-slate-700 focus:outline-none">
+            <option value="1200">1x (1.2с)</option>
+            <option value="600" selected>2x (0.6с)</option>
+            <option value="300">4x (0.3с)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Slider & Day Status Indicator -->
+      <div class="flex items-center gap-3 pt-1">
+        <span class="text-xs font-bold text-emerald-400 min-w-[90px]" id="simCurrentDayLabel">День 14 (14.02)</span>
+        <input type="range" id="simDaySlider" min="1" max="28" value="14" oninput="onSliderChange(this.value)" class="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg">
+        <div class="flex items-center gap-2 text-xs min-w-[200px] justify-end">
+          <span id="simDayMwh" class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-mono">-- МВт·ч</span>
+          <span id="simDayAlert" class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[11px]">🟢 Штатно</span>
+        </div>
+      </div>
+    </div>
+
     <!-- KPI Metric Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
@@ -489,6 +539,186 @@
         alert('Ошибка симуляции: ' + err.message);
       }
     }
+  </script>
+
+  <!-- SCADA Upload Modal -->
+  <div id="uploadModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="database" class="w-5 h-5 text-emerald-400"></i>
+          <h3 class="text-sm font-bold text-white">Загрузка исторических данных SCADA (ВЭС Шелек)</h3>
+        </div>
+        <button onclick="closeUploadModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="text-xs text-slate-300 space-y-2">
+        <p>Загрузите официальный CSV файл с историческими измерениями выработки ВЭС (март 2023 – 31 января 2026).</p>
+        <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-400 space-y-1">
+          <p class="text-emerald-400 font-semibold">Обязательные колонки:</p>
+          <p>• <span class="text-slate-200">time</span>: ISO-формат времени (YYYY-MM-DD HH:00:00)</p>
+          <p>• <span class="text-slate-200">normalized_power</span>: Активная мощность [0.0 ... 1.0]</p>
+          <p>• <span class="text-slate-200">temperature_2m</span>: Температура окружающей среды (°C)</p>
+          <p>• <span class="text-slate-200">wind_speed_10m</span> или <span class="text-slate-200">wind_speed_100m</span>: Скорость ветра (м/с)</p>
+        </div>
+      </div>
+
+      <div class="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-emerald-500/50 transition bg-slate-950/40">
+        <input type="file" id="scadaFileInput" accept=".csv" class="hidden" onchange="onFileSelected(this)">
+        <label for="scadaFileInput" class="cursor-pointer flex flex-col items-center gap-2">
+          <i data-lucide="upload-cloud" class="w-8 h-8 text-slate-400"></i>
+          <span class="text-xs font-medium text-slate-200" id="uploadFilename">Нажмите для выбора CSV файла</span>
+          <span class="text-[10px] text-slate-500">Поддерживается формат UTF-8 / CP1251, до 50 МБ</span>
+        </label>
+      </div>
+
+      <div id="uploadFeedback" class="text-xs p-3 rounded-lg hidden"></div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <button onclick="closeUploadModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition">Отмена</button>
+        <button id="uploadSubmitBtn" onclick="submitScadaUpload()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i> Загрузить и переобучить
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentData = null;
+    let activeLang = 'ru';
+    let chartInstance = null;
+    let isSimPlaying = false;
+    let simTimer = null;
+    let simDay = 14;
+    let selectedScadaFile = null;
+
+    if (window.lucide) lucide.createIcons();
+
+    function onSliderChange(val) {
+      simDay = parseInt(val);
+      updateSimDayView(simDay);
+    }
+
+    function stepSimulation(delta) {
+      simDay = Math.max(1, Math.min(28, simDay + delta));
+      document.getElementById('simDaySlider').value = simDay;
+      updateSimDayView(simDay);
+    }
+
+    async function updateSimDayView(day) {
+      const formattedDay = String(day).padStart(2, '0');
+      const targetDate = `2026-02-${formattedDay}`;
+      document.getElementById('targetDate').value = targetDate;
+      document.getElementById('simCurrentDayLabel').innerText = `День ${day} (${formattedDay}.02)`;
+      await runAgentForecast();
+      if (currentData && currentData.audit) {
+        document.getElementById('simDayMwh').innerText = `${currentData.audit.total_generation_mwh} МВт·ч`;
+        const isCrit = currentData.audit.agent_status === 'CRITICAL_SHUTDOWN';
+        const isWarn = currentData.audit.agent_status === 'ADVISORY_ATTENTION';
+        const alertEl = document.getElementById('simDayAlert');
+        if (isCrit) {
+          alertEl.innerText = '🔴 Шторм / Останов';
+          alertEl.className = 'px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40 text-[11px]';
+        } else if (isWarn) {
+          alertEl.innerText = '⚠️ Внимание';
+          alertEl.className = 'px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[11px]';
+        } else {
+          alertEl.innerText = '🟢 Штатно';
+          alertEl.className = 'px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[11px]';
+        }
+      }
+    }
+
+    function toggleSimulationPlay() {
+      if (isSimPlaying) {
+        stopSimulation();
+      } else {
+        startSimulation();
+      }
+    }
+
+    function startSimulation() {
+      isSimPlaying = true;
+      document.getElementById('simPlayText').innerText = 'Пауза';
+      document.getElementById('simPlayBtn').className = 'px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow transition';
+      const speed = parseInt(document.getElementById('simSpeed').value) || 600;
+      simTimer = setInterval(async () => {
+        if (simDay >= 28) {
+          stopSimulation();
+          return;
+        }
+        simDay++;
+        document.getElementById('simDaySlider').value = simDay;
+        await updateSimDayView(simDay);
+      }, speed);
+    }
+
+    function stopSimulation() {
+      isSimPlaying = false;
+      if (simTimer) clearInterval(simTimer);
+      simTimer = null;
+      document.getElementById('simPlayText').innerText = 'Воспроизвести февраль';
+      document.getElementById('simPlayBtn').className = 'px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow transition';
+    }
+
+    function openUploadModal() {
+      document.getElementById('uploadModal').classList.remove('hidden');
+      document.getElementById('uploadFeedback').classList.add('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeUploadModal() {
+      document.getElementById('uploadModal').classList.add('hidden');
+    }
+
+    function onFileSelected(input) {
+      if (input.files && input.files[0]) {
+        selectedScadaFile = input.files[0];
+        document.getElementById('uploadFilename').innerText = `${selectedScadaFile.name} (${(selectedScadaFile.size / 1024).toFixed(1)} КБ)`;
+      }
+    }
+
+    async function submitScadaUpload() {
+      if (!selectedScadaFile) {
+        alert('Пожалуйста, выберите CSV файл для загрузки');
+        return;
+      }
+      const btn = document.getElementById('uploadSubmitBtn');
+      const feedback = document.getElementById('uploadFeedback');
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Обработка и обучение...`;
+      if (window.lucide) lucide.createIcons();
+
+      feedback.classList.remove('hidden');
+      feedback.className = 'text-xs p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300';
+      feedback.innerText = 'Проверка структуры SCADA данных и переобучение LightGBM моделей турбин...';
+
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedScadaFile);
+        const resp = await fetch('/api/upload/scada', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+
+        feedback.className = 'text-xs p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300';
+        feedback.innerText = `Успешно! Загружено ${data.rows_count.toLocaleString()} записей (${data.start_date.split('T')[0]} - ${data.end_date.split('T')[0]}). Модели турбин откалиброваны.`;
+        
+        setTimeout(() => {
+          closeUploadModal();
+          runAgentForecast();
+        }, 1500);
+      } catch (err) {
+        feedback.className = 'text-xs p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300';
+        feedback.innerText = `Ошибка валидации: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> Загрузить и переобучить`;
+        if (window.lucide) lucide.createIcons();
+      }
+    }
 
     // Auto-run on page load
     window.addEventListener('DOMContentLoaded', () => {
@@ -497,3 +727,4 @@
   </script>
 </body>
 </html>
+

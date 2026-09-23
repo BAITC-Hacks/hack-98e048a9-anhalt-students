@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 import pandas as pd
@@ -162,6 +162,57 @@ def export_submission_csv():
     except Exception as exc:
         logger.exception("Submission export failed")
         raise HTTPException(status_code=500, detail="February submission could not be generated.") from exc
+
+
+@app.post("/api/upload/scada")
+async def upload_scada_data(file: UploadFile = File(...)):
+    """Upload verified SCADA historical CSV, validate schema, save and retrain models."""
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=422, detail="Только CSV файлы поддерживаются (.csv)")
+    try:
+        content = await file.read()
+        if len(content) > 50 * 1024 * 1024:
+            raise HTTPException(status_code=422, detail="Файл превышает лимит 50 МБ")
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            text = content.decode("cp1251")
+        df_raw = pd.read_csv(io.StringIO(text))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Ошибка чтения CSV: {exc}") from exc
+
+    try:
+        from backend.agent.data_loader import _validate_history, DATA_DIR
+        validated_df = _validate_history(df_raw)
+    except ValueError as val_err:
+        raise HTTPException(status_code=422, detail=f"Ошибка валидации колонок/данных SCADA: {val_err}") from val_err
+
+    target_path = Path(DATA_DIR) / "shelek_historical.csv"
+    validated_df.to_csv(target_path, index=False)
+
+    try:
+        pipe = get_pipeline()
+        metadata = pipe.reload_data_and_retrain()
+    except Exception as exc:
+        logger.exception("Retraining failed after CSV upload")
+        raise HTTPException(status_code=500, detail=f"Ошибка переобучения модели: {exc}") from exc
+
+    speed_col = "wind_speed_100m" if "wind_speed_100m" in validated_df else "wind_speed_10m"
+    return {
+        "status": "SUCCESS",
+        "filename": file.filename,
+        "rows_count": len(validated_df),
+        "start_date": validated_df["time"].iloc[0].isoformat(),
+        "end_date": validated_df["time"].iloc[-1].isoformat(),
+        "columns": list(validated_df.columns),
+        "mean_normalized_power": round(float(validated_df["normalized_power"].mean()), 4),
+        "mean_wind_speed": round(float(validated_df[speed_col].mean()), 2),
+        "data_source": "USER_SUPPLIED_VERIFIED",
+        "training_metadata": metadata,
+        "message": "SCADA данные успешно загружены. Модели турбин переобучены и откалиброваны."
+    }
 
 
 @app.get("/", response_class=HTMLResponse)

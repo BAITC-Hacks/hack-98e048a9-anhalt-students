@@ -68,6 +68,7 @@ class ForecastRequest(BaseModel):
     horizon_hours: int = Field(48, ge=1, le=168, description="Hourly steps (24 or 48 for the challenge)")
     turbine_id: TurbineId = Field("turbine_1", description="turbine_1, turbine_2, or farm")
     refresh_weather: bool = Field(False, description="Refresh weather and re-evaluate this forecast")
+    storm_scenario: bool = Field(False, description="Run an explicit hurricane/storm wind scenario (>= 25 m/s) to demonstrate cut-out shutdown")
 
     @field_validator("target_date")
     @classmethod
@@ -123,6 +124,26 @@ def generate_forecast_post(req: ForecastRequest):
 
 @app.get("/api/forecast")
 def generate_forecast_get(req: Annotated[ForecastRequest, Depends()]):
+    return _forecast(req)
+
+
+@app.get("/api/demo/storm")
+def get_storm_demo(
+    target_date: str = Query("2026-02-14", pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    horizon_hours: int = Query(24, ge=1, le=168),
+    turbine_id: TurbineId = Query("farm"),
+):
+    """
+    Real execution of the full forecasting pipeline under hurricane-force winds (>= 25 m/s).
+    Shows the physical aerodynamic cut-out enforcing 0.0 MW generation, bilingual alerts, and audit trail.
+    """
+    req = ForecastRequest(
+        target_date=target_date,
+        horizon_hours=horizon_hours,
+        turbine_id=turbine_id,
+        refresh_weather=True,
+        storm_scenario=True,
+    )
     return _forecast(req)
 
 

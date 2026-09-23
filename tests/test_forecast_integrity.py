@@ -281,3 +281,18 @@ def test_pipeline_transactional_retraining_success(tmp_path):
     assert pipe.history.attrs["data_source"] == "USER_SUPPLIED_UNVERIFIED"
 
 
+def test_real_pipeline_storm_scenario_enforces_cutout_zero_generation():
+    from backend.agent.pipeline import SamrukWindAgentPipeline
+
+    pipe = SamrukWindAgentPipeline()
+    res = pipe.run_forecast_cycle("2026-02-14", 24, "farm", storm_scenario=True)
+    assert res["status"] == "SUCCESS"
+    assert res["audit"]["agent_status"] == "CRITICAL_SHUTDOWN"
+    assert res["audit"]["alerts"]["storm_cutout_detected"] is True
+    assert res["audit"]["total_generation_mwh"] == 0.0
+    assert all(row["predicted_power"] == 0.0 for row in res["timeline"])
+    assert "ДАУЫЛ" in res["audit"]["dispatcher_brief_kz"].upper()
+    assert "ШТОРМ" in res["audit"]["dispatcher_brief_ru"].upper()
+
+
+

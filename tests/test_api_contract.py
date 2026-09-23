@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 import io
 import json
 from pathlib import Path
+import re
+import shutil
 
 import pandas as pd
 import pytest
@@ -17,9 +19,9 @@ class StubPipeline:
     def __init__(self):
         self.calls = []
 
-    def run_forecast_cycle(self, target_date, horizon_hours, turbine_id, refresh_weather=False):
+    def run_forecast_cycle(self, target_date, horizon_hours, turbine_id, refresh_weather=False, storm_scenario=False, **kwargs):
         self.calls.append((target_date, horizon_hours, turbine_id, refresh_weather))
-        power = {"turbine_1": 1.0, "turbine_2": 2.0, "farm": 3.0}[turbine_id]
+        power = 0.0 if storm_scenario else {"turbine_1": 1.0, "turbine_2": 2.0, "farm": 3.0}[turbine_id]
         start = datetime.fromisoformat(target_date)
         timeline = [{
             "hour_index": index,
@@ -240,8 +242,37 @@ def test_frontend_js_syntax_via_node():
     import subprocess
     js_test_script = Path("scripts/test_js_syntax.js")
     assert js_test_script.is_file(), "scripts/test_js_syntax.js must exist"
-    res = subprocess.run(["node", str(js_test_script)], capture_output=True, text=True)
-    assert "SUCCESS: Script parsed cleanly with zero syntax errors!" in res.stdout
-    assert "SUCCESS: All required UI functions are defined in the script!" in res.stdout
+
+    # Internal Python verification (always executed, pure Python)
+    html_content = Path("backend/static/index.html").read_text(encoding="utf-8")
+    scripts = [s for s in re.findall(r"<script(?:\s+[^>]*)?>([\s\S]*?)</script>", html_content, re.IGNORECASE) if s.strip()]
+    assert len(scripts) == 1, f"Expected exactly 1 inline script block, got {len(scripts)}"
+    script_code = scripts[0]
+    required_fns = [
+        "openUploadModal", "closeUploadModal", "submitScadaUpload", "onFileSelected",
+        "toggleSimulationPlay", "playFromDayOne", "startSimulation", "stopSimulation", "onSliderChange",
+        "stepSimulation", "updateSimDayView", "runAgentForecast", "renderDashboard",
+        "openPresentationModal", "closePresentationModal", "goToSlide", "demoStormCutout"
+    ]
+    for fn in required_fns:
+        assert f"function {fn}" in script_code, f"Missing function {fn} in frontend script"
+
+    # External Node.js AST/VM check if node is in PATH
+    if shutil.which("node"):
+        res = subprocess.run(["node", str(js_test_script)], capture_output=True, text=True)
+        assert res.returncode == 0, f"Node JS syntax check failed: {res.stdout}\n{res.stderr}"
+        assert "SUCCESS: Script parsed cleanly with zero syntax errors!" in res.stdout
+        assert "SUCCESS: All required UI functions are defined in the script!" in res.stdout
+
+
+def test_demo_storm_endpoint_returns_cutout_forecast(api):
+    client, pipeline = api
+    response = client.get("/api/demo/storm?target_date=2026-02-14&horizon_hours=24&turbine_id=farm")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "SUCCESS"
+    assert len(data["timeline"]) == 24
+    assert all(row["predicted_mwh"] == 0.0 for row in data["timeline"])
+
 
 

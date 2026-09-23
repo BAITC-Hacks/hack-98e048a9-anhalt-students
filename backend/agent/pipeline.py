@@ -50,7 +50,7 @@ class SamrukWindAgentPipeline:
         return frame
 
     def run_forecast_cycle(self, target_date="2026-02-14", horizon_hours=48,
-                           turbine_id="turbine_1", refresh_weather=False):
+                           turbine_id="turbine_1", refresh_weather=False, storm_scenario=False):
         if turbine_id in ("all", "both", "cluster"):
             turbine_id = "farm"
         if turbine_id not in TURBINES:
@@ -63,22 +63,29 @@ class SamrukWindAgentPipeline:
             if cutoff != getattr(self, "_training_cutoff", pd.Timestamp("2026-02-01")):
                 self.training_metadata = self.model.train(self.history, cutoff=cutoff)
                 self._training_cutoff = cutoff
+            if storm_scenario:
+                if turbine_id == "farm":
+                    return self._combine_farm([self._run_single(target_date, horizon_hours, tid, refresh_weather, storm_scenario=True)
+                                               for tid in ("turbine_1", "turbine_2")])
+                return self._run_single(target_date, horizon_hours, turbine_id, refresh_weather, storm_scenario=True)
             if turbine_id == "farm":
                 return self._combine_farm([self._run_single(target_date, horizon_hours, tid, refresh_weather)
                                            for tid in ("turbine_1", "turbine_2")])
             return self._run_single(target_date, horizon_hours, turbine_id, refresh_weather)
 
-    def _run_single(self, target_date, hours, turbine_id, refresh_weather):
+    def _run_single(self, target_date, hours, turbine_id, refresh_weather, storm_scenario=False):
         turbine = TURBINES[turbine_id]
         capacity = float(turbine["rated_mw"])
         start = datetime.strptime(target_date, "%Y-%m-%d")
         end_date = (start + timedelta(hours=hours - 1)).strftime("%Y-%m-%d")
         trace = []
         self._trace(trace, "plan", "fetch_validate_predict_audit", "Produce a complete hourly forecast", hours=hours)
+        fetch_kwargs = {"storm_scenario": True} if storm_scenario else {}
         for attempt in range(2):
             try:
                 raw = self.weather_tool.fetch_forecast(turbine["lat"], turbine["lon"], target_date,
-                                                       end_date, force_refresh=refresh_weather or attempt > 0)
+                                                       end_date, force_refresh=refresh_weather or attempt > 0,
+                                                       **fetch_kwargs)
                 frame = self._validate_weather(raw, start, hours)
                 self._trace(trace, "retrieve", "weather_accepted", "Complete finite hourly weather grid", attempt=attempt + 1)
                 break
@@ -86,8 +93,8 @@ class SamrukWindAgentPipeline:
                 self._trace(trace, "validate", "refresh_weather", str(exc), attempt=attempt + 1)
                 if attempt == 1:
                     raise ValueError("Weather validation failed after one refresh") from exc
-        fingerprint = hashlib.sha256(frame.to_json(date_format="iso").encode()).hexdigest()
-        key = (target_date, hours, turbine_id)
+        fingerprint = hashlib.sha256((frame.to_json(date_format="iso") + str(storm_scenario)).encode()).hexdigest()
+        key = (target_date, hours, turbine_id, storm_scenario)
         previous = self._runs.get(key)
         changed = previous is not None and previous["fingerprint"] != fingerprint
         revision = previous["revision"] + int(changed) if previous else 1

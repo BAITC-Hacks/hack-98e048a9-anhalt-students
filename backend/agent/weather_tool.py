@@ -1,4 +1,4 @@
-﻿"""Open-Meteo retrieval with explicit sources, units and demo fallback."""
+"""Open-Meteo retrieval with explicit sources, units and demo fallback."""
 
 import json
 import os
@@ -93,10 +93,24 @@ class WeatherAgentTool:
         df.attrs["hub_wind_method"] = hub_method
         return df
 
-    def fetch_forecast(self, lat: float, lon: float, start_date: str, end_date: str, force_refresh: bool = False) -> pd.DataFrame:
+    def fetch_forecast(self, lat: float, lon: float, start_date: str, end_date: str,
+                       force_refresh: bool = False, storm_scenario: bool = False) -> pd.DataFrame:
         start, end = self._validate_dates(start_date, end_date)
         if not np.isfinite([lat, lon]).all() or not (-90 <= lat <= 90 and -180 <= lon <= 180):
             raise ValueError("Invalid geographic coordinates")
+        if storm_scenario:
+            df = self._decode_weather(self._generate_storm_weather(start_date, end_date), start_date, end_date)
+            df.attrs.update(
+                data_source="STORM_TEST_SCENARIO",
+                weather_kind="storm_test_scenario",
+                forecast_issue_time_verified=False,
+                timezone="Asia/Almaty",
+                cache_hit=False,
+                retrieved_at=datetime.now(timezone.utc).isoformat(),
+                fallback_reason="STORM_TEST_SCENARIO active: demonstration of wind >= 25 m/s safety cut-out",
+            )
+            df["data_source"] = "STORM_TEST_SCENARIO"
+            return df
         mock_mode = os.environ.get("DEMO_MOCK_MODE", "").lower() in ("true", "1", "yes")
         is_historical = end < self._today()
         cache_path = os.path.join(CACHE_DIR, f"{lat:.6f}_{lon:.6f}_{start_date}_{end_date}.json")
@@ -199,3 +213,22 @@ class WeatherAgentTool:
             "hourly_units": {"wind_speed_100m": "m/s", "wind_speed_10m": "m/s", "temperature_2m": "\u00b0C", "surface_pressure": "hPa"},
             "hourly": pd.concat(frames, ignore_index=True).to_dict(orient="list"),
         }
+
+    def _generate_storm_weather(self, start_date: str, end_date: str) -> dict:
+        """Synthetic hurricane/storm scenario (wind >= 25 m/s) to demonstrate cut-out safety shutdown."""
+        self._validate_dates(start_date, end_date)
+        frames = []
+        for day in pd.date_range(start_date, end_date, freq="D"):
+            frames.append(pd.DataFrame({
+                "time": pd.date_range(day, periods=24, freq="h").strftime("%Y-%m-%dT%H:%M"),
+                "temperature_2m": np.full(24, -4.5),
+                "wind_speed_10m": np.full(24, 21.0),
+                "wind_speed_100m": np.linspace(26.5, 28.5, 24),
+                "wind_direction_100m": np.full(24, 95),
+                "surface_pressure": np.full(24, 940.0),
+            }))
+        return {
+            "hourly_units": {"wind_speed_100m": "m/s", "wind_speed_10m": "m/s", "temperature_2m": "\u00b0C", "surface_pressure": "hPa"},
+            "hourly": pd.concat(frames, ignore_index=True).to_dict(orient="list"),
+        }
+

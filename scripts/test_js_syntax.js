@@ -17,9 +17,9 @@ try {
   console.log('SUCCESS: Script parsed cleanly with zero syntax errors! (' + code.length + ' chars)');
   const requiredFns = [
     'openUploadModal', 'closeUploadModal', 'submitScadaUpload', 'onFileSelected',
-    'toggleSimulationPlay', 'startSimulation', 'stopSimulation', 'onSliderChange',
+    'toggleSimulationPlay', 'playFromDayOne', 'startSimulation', 'stopSimulation', 'onSliderChange',
     'stepSimulation', 'updateSimDayView', 'runAgentForecast', 'renderDashboard',
-    'openPresentationModal', 'closePresentationModal', 'goToSlide'
+    'openPresentationModal', 'closePresentationModal', 'goToSlide', 'demoStormCutout'
   ];
   for (const fn of requiredFns) {
     if (!code.includes(`function ${fn}`)) {

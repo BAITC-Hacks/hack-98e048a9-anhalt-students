@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Samruk WindAgent AI — Прогнозирование выработки ВЭС</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .pulse-dot { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 py-4 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+          <i data-lucide="wind" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold tracking-tight text-white">Samruk WindAgent AI</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-medium">Самрук-Қазына</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 font-medium">HackAlem AI</span>
+          </div>
+          <p class="text-xs text-slate-400">Agentic AI система почасового прогнозирования выработки ВЭС (Шелекский коридор, 24–48 ч)</p>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center bg-slate-800/80 rounded-lg border border-slate-700 p-1">
+          <label class="text-xs text-slate-400 px-2 flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> Дата:</label>
+          <input type="date" id="targetDate" value="2026-02-14" min="2026-02-01" max="2026-02-28" 
+                 class="bg-slate-900 text-slate-200 text-xs rounded px-2 py-1 border border-slate-700 focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div class="flex items-center bg-slate-800/80 rounded-lg border border-slate-700 p-1">
+          <label class="text-xs text-slate-400 px-2 flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i> Горизонт:</label>
+          <select id="horizonHours" class="bg-slate-900 text-slate-200 text-xs rounded px-2 py-1 border border-slate-700 focus:outline-none">
+            <option value="24">24 часа</option>
+            <option value="48" selected>48 часов</option>
+          </select>
+        </div>
+
+        <div class="flex items-center bg-slate-800/80 rounded-lg border border-slate-700 p-1">
+          <label class="text-xs text-slate-400 px-2 flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> ВЭС:</label>
+          <select id="turbineSelect" class="bg-slate-900 text-slate-200 text-xs rounded px-2 py-1 border border-slate-700 focus:outline-none">
+            <option value="turbine_1">Турбина №1 (43.6451, 78.5356)</option>
+            <option value="turbine_2">Турбина №2 (43.6432, 78.5388)</option>
+          </select>
+        </div>
+
+        <button id="runBtn" onclick="runAgentForecast()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg flex items-center gap-2 transition shadow-lg shadow-emerald-900/30">
+          <i data-lucide="play" class="w-3.5 h-3.5"></i> Запустить Агента
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto p-6 flex-1 w-full space-y-6">
+
+    <!-- KPI Metric Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-400">Прогноз выработки</p>
+          <h3 id="kpiGeneration" class="text-2xl font-bold text-emerald-400 mt-1">-- МВт·ч</h3>
+          <p class="text-[11px] text-slate-500 mt-0.5">Кластер 2x 2.5 МВт (5 МВт)</p>
+        </div>
+        <div class="h-10 w-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+          <i data-lucide="zap" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-400">КУИМ (Capacity Factor)</p>
+          <h3 id="kpiCapacityFactor" class="text-2xl font-bold text-blue-400 mt-1">-- %</h3>
+          <p class="text-[11px] text-slate-500 mt-0.5">Средний коэф. использования</p>
+        </div>
+        <div class="h-10 w-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+          <i data-lucide="gauge" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-400">Экономия на штрафах KEGOC</p>
+          <h3 id="kpiPenalty" class="text-2xl font-bold text-amber-400 mt-1">-- ₸</h3>
+          <p class="text-[11px] text-slate-500 mt-0.5">Снижение дисбалансов сетки</p>
+        </div>
+        <div class="h-10 w-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+          <i data-lucide="shield-check" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-400">Статус безопасности турбин</p>
+          <h3 id="kpiStatus" class="text-sm font-semibold text-slate-200 mt-1 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span> Готов к расчёту
+          </h3>
+          <p id="kpiAlertCount" class="text-[11px] text-slate-500 mt-0.5">0 алертов</p>
+        </div>
+        <div class="h-10 w-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+          <i data-lucide="activity" class="w-5 h-5"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agentic Workflow Terminal / Status Bar -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="bot" class="w-4 h-4 text-emerald-400"></i>
+          <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider">Agentic AI Execution Pipeline (Hermes Flow)</span>
+        </div>
+        <span id="agentTime" class="text-[11px] text-slate-500">Автономный цикл: готов</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs" id="agentSteps">
+        <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
+          <span class="text-emerald-400 font-bold">1</span>
+          <div>
+            <p class="font-medium text-slate-300">Geo Coordinates</p>
+            <p class="text-[10px] text-slate-500">Шелек: 43.645°N, 78.535°E</p>
+          </div>
+        </div>
+        <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
+          <span class="text-emerald-400 font-bold">2</span>
+          <div>
+            <p class="font-medium text-slate-300">Open-Meteo API</p>
+            <p class="text-[10px] text-slate-500">Архив погоды (v10m, v100m, T)</p>
+          </div>
+        </div>
+        <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
+          <span class="text-emerald-400 font-bold">3</span>
+          <div>
+            <p class="font-medium text-slate-300">Physics Normalization</p>
+            <p class="text-[10px] text-slate-500">Плотность ρ(T), Power Curve</p>
+          </div>
+        </div>
+        <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
+          <span class="text-emerald-400 font-bold">4</span>
+          <div>
+            <p class="font-medium text-slate-300">LightGBM Forecast</p>
+            <p class="text-[10px] text-slate-500">Почасовой прогноз мощности</p>
+          </div>
+        </div>
+        <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
+          <span class="text-emerald-400 font-bold">5</span>
+          <div>
+            <p class="font-medium text-slate-300">Dispatcher Audit</p>
+            <p class="text-[10px] text-slate-500">KEGOC рекомендации & риски</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts and Dispatcher Panel -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Chart Column (2 cols) -->
+      <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-sm font-semibold text-slate-200">Почасовой профиль генерации и метеоусловий</h3>
+            <p class="text-xs text-slate-400">Активная мощность ВЭС (МВт) vs Скорость ветра на высоте ступицы 100м</p>
+          </div>
+          <button onclick="downloadCSV()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs rounded-lg flex items-center gap-1.5 transition">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Экспорт CSV
+          </button>
+        </div>
+        
+        <div class="flex-1 min-h-[360px] relative">
+          <canvas id="forecastChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Dispatcher Briefing & Alerts Column (1 col) -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+            <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+              <i data-lucide="file-text" class="w-4 h-4 text-emerald-400"></i> Диспетчерский бриф
+            </h3>
+            <div class="flex text-xs rounded bg-slate-800 p-0.5 border border-slate-700">
+              <button id="langRu" onclick="switchLang('ru')" class="px-2 py-0.5 rounded bg-slate-700 text-white font-medium">RU</button>
+              <button id="langKz" onclick="switchLang('kz')" class="px-2 py-0.5 rounded text-slate-400">KZ</button>
+            </div>
+          </div>
+
+          <div id="briefContent" class="text-xs text-slate-300 leading-relaxed space-y-2 whitespace-pre-line bg-slate-950/60 p-3 rounded-lg border border-slate-800/80 min-h-[160px]">
+            Нажмите «Запустить Агента», чтобы выполнить расчет прогноза и сформировать аудиторский отчёт для системного оператора KEGOC.
+          </div>
+
+          <!-- Alert Container -->
+          <div class="mt-4 space-y-2" id="alertsList"></div>
+        </div>
+
+        <!-- Simulation CTA -->
+        <div class="mt-6 pt-4 border-t border-slate-800/80">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-medium text-slate-200">Бэктест за весь февраль</p>
+              <p class="text-[10px] text-slate-500">28 последовательных прогнозов</p>
+            </div>
+            <button onclick="runFebruarySimulation()" class="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 text-xs font-medium rounded-lg flex items-center gap-1.5 transition">
+              <i data-lucide="fast-forward" class="w-3.5 h-3.5"></i> Симуляция 28 дней
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 py-3 px-6 text-center text-xs text-slate-500">
+    HackAlem AI 2026 • Команда Anhalt Students • Кейс: АО «Самрук-Қазына» (Agentic AI для ВЭС)
+  </footer>
+
+  <script>
+    let currentData = null;
+    let activeLang = 'ru';
+    let chartInstance = null;
+
+    lucide.createIcons();
+
+    function switchLang(lang) {
+      activeLang = lang;
+      document.getElementById('langRu').className = lang === 'ru' ? 'px-2 py-0.5 rounded bg-slate-700 text-white font-medium' : 'px-2 py-0.5 rounded text-slate-400';
+      document.getElementById('langKz').className = lang === 'kz' ? 'px-2 py-0.5 rounded bg-slate-700 text-white font-medium' : 'px-2 py-0.5 rounded text-slate-400';
+      if (currentData && currentData.audit) {
+        document.getElementById('briefContent').innerText = lang === 'ru' ? currentData.audit.dispatcher_brief_ru : currentData.audit.dispatcher_brief_kz;
+      }
+    }
+
+    async function runAgentForecast() {
+      const btn = document.getElementById('runBtn');
+      const date = document.getElementById('targetDate').value;
+      const horizon = parseInt(document.getElementById('horizonHours').value);
+      const turbine = document.getElementById('turbineSelect').value;
+
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Агент рассчитывает...`;
+      lucide.createIcons();
+
+      try {
+        const resp = await fetch('/api/forecast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target_date: date, horizon_hours: horizon, turbine_id: turbine })
+        });
+        const data = await resp.json();
+        currentData = data;
+        renderDashboard(data);
+      } catch (err) {
+        alert('Ошибка при выполнении расчёта: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Запустить Агента`;
+        lucide.createIcons();
+      }
+    }
+
+    function renderDashboard(data) {
+      const audit = data.audit;
+      document.getElementById('kpiGeneration').innerText = `${audit.total_generation_mwh} МВт·ч`;
+      document.getElementById('kpiCapacityFactor').innerText = `${audit.capacity_factor_pct}%`;
+      document.getElementById('kpiPenalty').innerText = `${audit.estimated_penalty_saved_kzt.toLocaleString()} ₸`;
+
+      const statusEl = document.getElementById('kpiStatus');
+      const alertCountEl = document.getElementById('kpiAlertCount');
+      if (audit.alerts.storm_cutout_detected) {
+        statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 pulse-dot"></span> Шторм (v >= 25 м/с)`;
+        statusEl.className = "text-sm font-semibold text-red-400 flex items-center gap-1.5";
+      } else {
+        statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span> Штатный режим`;
+        statusEl.className = "text-sm font-semibold text-emerald-400 flex items-center gap-1.5";
+      }
+
+      switchLang(activeLang);
+
+      // Render alerts
+      const alertsContainer = document.getElementById('alertsList');
+      alertsContainer.innerHTML = '';
+      if (audit.alerts.storm_cutout_detected) {
+        alertsContainer.innerHTML += `
+          <div class="p-2.5 rounded bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-red-400 shrink-0"></i>
+            <span>Штормовое отключение в часы: ${audit.alerts.storm_hours.join(', ')}</span>
+          </div>`;
+      }
+      if (audit.alerts.icing_risk_detected) {
+        alertsContainer.innerHTML += `
+          <div class="p-2.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs flex items-center gap-2">
+            <i data-lucide="snowflake" class="w-4 h-4 text-blue-400 shrink-0"></i>
+            <span>Обледенение лопастей в часы: ${audit.alerts.icing_hours.join(', ')}</span>
+          </div>`;
+      }
+      lucide.createIcons();
+
+      // Render Chart
+      renderChart(data.timeline);
+    }
+
+    function renderChart(timeline) {
+      const labels = timeline.map(t => t.timestamp.split('T')[1] || t.timestamp.split(' ')[1] || `${t.hour_index}:00`);
+      const powerData = timeline.map(t => t.predicted_mwh);
+      const wind100Data = timeline.map(t => t.wind_speed_100m);
+      const wind10Data = timeline.map(t => t.wind_speed_10m);
+
+      const ctx = document.getElementById('forecastChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Активная выработка ВЭС (МВт)',
+              data: powerData,
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+              fill: true,
+              yAxisID: 'yPower',
+              tension: 0.35,
+              borderWidth: 2.5
+            },
+            {
+              label: 'Скорость ветра 100м ступица (м/с)',
+              data: wind100Data,
+              borderColor: '#38bdf8',
+              borderDash: [4, 4],
+              yAxisID: 'yWind',
+              tension: 0.3,
+              borderWidth: 2
+            },
+            {
+              label: 'Скорость ветра 10м (м/с)',
+              data: wind10Data,
+              borderColor: '#64748b',
+              yAxisID: 'yWind',
+              tension: 0.3,
+              borderWidth: 1.5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: {
+              grid: { color: 'rgba(51, 65, 85, 0.3)' },
+              ticks: { color: '#94a3b8', font: { size: 10 } }
+            },
+            yPower: {
+              type: 'linear',
+              position: 'left',
+              title: { display: true, text: 'Выработка (МВт)', color: '#10b981' },
+              grid: { color: 'rgba(51, 65, 85, 0.3)' },
+              ticks: { color: '#10b981' },
+              min: 0,
+              max: 5.2
+            },
+            yWind: {
+              type: 'linear',
+              position: 'right',
+              title: { display: true, text: 'Ветер (м/с)', color: '#38bdf8' },
+              grid: { drawOnChartArea: false },
+              ticks: { color: '#38bdf8' },
+              min: 0
+            }
+          },
+          plugins: {
+            legend: {
+              labels: { color: '#cbd5e1', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    function downloadCSV() {
+      const date = document.getElementById('targetDate').value;
+      const horizon = document.getElementById('horizonHours').value;
+      window.location.href = `/api/export/csv?target_date=${date}&horizon_hours=${horizon}`;
+    }
+
+    async function runFebruarySimulation() {
+      alert('Запуск последовательной 28-дневной симуляции тестового периода (Февраль 2026)...');
+      try {
+        const resp = await fetch('/api/simulation/february');
+        const data = await resp.json();
+        alert(`Симуляция за февраль 2026 успешно выполнена!\nВсего дней: ${data.total_days}\nСуммарная выработка кластера: ${data.total_monthly_mwh} МВт·ч\nСредняя выработка в сутки: ${data.mean_daily_mwh} МВт·ч`);
+      } catch (err) {
+        alert('Ошибка симуляции: ' + err.message);
+      }
+    }
+
+    // Auto-run on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      runAgentForecast();
+    });
+  </script>
+</body>
+</html>

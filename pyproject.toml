@@ -1,0 +1,22 @@
+[project]
+name = "samruk-wind-agent"
+version = "0.1.0"
+description = "Agentic AI for Wind Power Plant Generation Forecasting (Samruk-Kazyna)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "pydantic>=2.8.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "scikit-learn>=1.5.0",
+    "lightgbm>=4.4.0",
+    "requests>=2.32.0",
+    "python-dotenv>=1.0.0",
+    "pytest>=8.3.0"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,0 +1,13 @@
+---
+description: HackAlem AI rules for Cursor Agent
+globs: *
+alwaysApply: true
+---
+
+# HackAlem AI Hackathon Rules for Cursor
+
+- **Sync with Antigravity:** Read `PROJECT_RULES.md` before making architecture changes.
+- **Full Code Only:** Never emit truncated code or placeholders.
+- **Rule 5.4.15 & 5.6.5 Compliance:** Every feature must run without crashing.
+- **Rule 5.6.6 Compliance:** Always provide fallback demo data if external API keys (OpenAI / Codex / Gemini) are unset.
+- **Security:** Do not commit `.env`.

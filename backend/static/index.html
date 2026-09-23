@@ -20,7 +20,7 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
 
   <!-- Header -->
-  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 py-4 sticky top-0 z-50">
+  <header class="border-b border-slate-800 bg-slate-900/70 backdrop-blur px-6 py-4 sticky top-0 z-50">
     <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3">
         <div class="h-10 w-10 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
@@ -30,14 +30,14 @@
           <div class="flex items-center gap-2">
             <h1 class="text-xl font-bold tracking-tight text-white">Samruk WindAgent AI</h1>
             <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-medium">Самрук-Қазына</span>
-            <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 font-medium">HackAlem AI</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 font-medium">HackAlem AI 2026</span>
           </div>
-          <p class="text-xs text-slate-400">Agentic AI система почасового прогнозирования выработки ВЭС (Шелекский коридор, 24–48 ч)</p>
+          <p class="text-xs text-slate-400">Физически-обоснованный Agentic AI прогноз генерации ВЭС (Шелекский коридор, 24–48 ч)</p>
         </div>
       </div>
 
       <!-- Controls -->
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-2.5">
         <div class="flex items-center bg-slate-800/80 rounded-lg border border-slate-700 p-1">
           <label class="text-xs text-slate-400 px-2 flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> Дата:</label>
           <input type="date" id="targetDate" value="2026-02-14" min="2026-02-01" max="2026-02-28" 
@@ -53,10 +53,11 @@
         </div>
 
         <div class="flex items-center bg-slate-800/80 rounded-lg border border-slate-700 p-1">
-          <label class="text-xs text-slate-400 px-2 flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> ВЭС:</label>
+          <label class="text-xs text-slate-400 px-2 flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Объект:</label>
           <select id="turbineSelect" class="bg-slate-900 text-slate-200 text-xs rounded px-2 py-1 border border-slate-700 focus:outline-none">
-            <option value="turbine_1">Турбина №1 (43.6451, 78.5356)</option>
-            <option value="turbine_2">Турбина №2 (43.6432, 78.5388)</option>
+            <option value="turbine_1">Турбина №1 (2.5 МВт, Западная)</option>
+            <option value="turbine_2">Турбина №2 (2.5 МВт, Восточная)</option>
+            <option value="farm" selected>ВЭС Шелек (5.0 МВт, 2 турбины)</option>
           </select>
         </div>
 
@@ -76,7 +77,7 @@
         <div>
           <p class="text-xs font-medium text-slate-400">Прогноз выработки</p>
           <h3 id="kpiGeneration" class="text-2xl font-bold text-emerald-400 mt-1">-- МВт·ч</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5">Кластер 2x 2.5 МВт (5 МВт)</p>
+          <p id="kpiCapacityLabel" class="text-[11px] text-slate-500 mt-0.5">Установленная мощность: 5.0 МВт</p>
         </div>
         <div class="h-10 w-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
           <i data-lucide="zap" class="w-5 h-5"></i>
@@ -87,7 +88,7 @@
         <div>
           <p class="text-xs font-medium text-slate-400">КУИМ (Capacity Factor)</p>
           <h3 id="kpiCapacityFactor" class="text-2xl font-bold text-blue-400 mt-1">-- %</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5">Средний коэф. использования</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">Коэф. использования мощности</p>
         </div>
         <div class="h-10 w-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
           <i data-lucide="gauge" class="w-5 h-5"></i>
@@ -96,9 +97,9 @@
 
       <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
         <div>
-          <p class="text-xs font-medium text-slate-400">Экономия на штрафах KEGOC</p>
+          <p class="text-xs font-medium text-slate-400">Экономия штрафов KEGOC</p>
           <h3 id="kpiPenalty" class="text-2xl font-bold text-amber-400 mt-1">-- ₸</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5">Снижение дисбалансов сетки</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">Балансирующий рынок (14 500 ₸/МВт·ч)</p>
         </div>
         <div class="h-10 w-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
           <i data-lucide="shield-check" class="w-5 h-5"></i>
@@ -107,14 +108,12 @@
 
       <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
         <div>
-          <p class="text-xs font-medium text-slate-400">Статус безопасности турбин</p>
-          <h3 id="kpiStatus" class="text-sm font-semibold text-slate-200 mt-1 flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span> Готов к расчёту
-          </h3>
-          <p id="kpiAlertCount" class="text-[11px] text-slate-500 mt-0.5">0 алертов</p>
+          <p class="text-xs font-medium text-slate-400">Бенчмарк Skill Score</p>
+          <h3 id="kpiSkillScore" class="text-2xl font-bold text-purple-400 mt-1">--</h3>
+          <p id="kpiModelComparison" class="text-[11px] text-slate-500 mt-0.5">vs Persistence baseline</p>
         </div>
         <div class="h-10 w-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-          <i data-lucide="activity" class="w-5 h-5"></i>
+          <i data-lucide="trending-up" class="w-5 h-5"></i>
         </div>
       </div>
     </div>
@@ -124,45 +123,48 @@
       <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
         <div class="flex items-center gap-2">
           <i data-lucide="bot" class="w-4 h-4 text-emerald-400"></i>
-          <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider">Agentic AI Execution Pipeline (Hermes Flow)</span>
+          <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider">Агентный конвейер вычислений (Multi-Model Architecture)</span>
         </div>
-        <span id="agentTime" class="text-[11px] text-slate-500">Автономный цикл: готов</span>
+        <div class="flex items-center gap-2">
+          <span id="provenanceBadge" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Источник: Open-Meteo API (m/s)</span>
+          <span id="agentStatusBadge" class="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Штатный режим</span>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs" id="agentSteps">
         <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
           <span class="text-emerald-400 font-bold">1</span>
           <div>
-            <p class="font-medium text-slate-300">Geo Coordinates</p>
+            <p class="font-medium text-slate-300">Geo Tool (WGS84)</p>
             <p class="text-[10px] text-slate-500">Шелек: 43.645°N, 78.535°E</p>
           </div>
         </div>
         <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
           <span class="text-emerald-400 font-bold">2</span>
           <div>
-            <p class="font-medium text-slate-300">Open-Meteo API</p>
-            <p class="text-[10px] text-slate-500">Архив погоды (v10m, v100m, T)</p>
+            <p class="font-medium text-slate-300">NWP Historical Forecast</p>
+            <p class="text-[10px] text-slate-500">Архив погоды (v10m, v100m в м/с)</p>
           </div>
         </div>
         <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
           <span class="text-emerald-400 font-bold">3</span>
           <div>
-            <p class="font-medium text-slate-300">Physics Normalization</p>
-            <p class="text-[10px] text-slate-500">Плотность ρ(T), Power Curve</p>
+            <p class="font-medium text-slate-300">Physics Baseline</p>
+            <p class="text-[10px] text-slate-500">Плотность ρ(T,P), IEC 61400-12</p>
           </div>
         </div>
         <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
           <span class="text-emerald-400 font-bold">4</span>
           <div>
-            <p class="font-medium text-slate-300">LightGBM Forecast</p>
-            <p class="text-[10px] text-slate-500">Почасовой прогноз мощности</p>
+            <p class="font-medium text-slate-300">Physics-Informed ML</p>
+            <p class="text-[10px] text-slate-500">LightGBM градиентный бустинг</p>
           </div>
         </div>
         <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
           <span class="text-emerald-400 font-bold">5</span>
           <div>
-            <p class="font-medium text-slate-300">Dispatcher Audit</p>
-            <p class="text-[10px] text-slate-500">KEGOC рекомендации & риски</p>
+            <p class="font-medium text-slate-300">Диспетчерский аудит</p>
+            <p class="text-[10px] text-slate-500">KEGOC балансировка, RU & KZ</p>
           </div>
         </div>
       </div>
@@ -175,25 +177,25 @@
       <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h3 class="text-sm font-semibold text-slate-200">Почасовой профиль генерации и метеоусловий</h3>
-            <p class="text-xs text-slate-400">Активная мощность ВЭС (МВт) vs Скорость ветра на высоте ступицы 100м</p>
+            <h3 class="text-sm font-semibold text-slate-200">Почасовой профиль генерации и мультимодельное сравнение</h3>
+            <p class="text-xs text-slate-400">Сравнение: Physics-Informed LightGBM vs Физика IEC vs Навстречу (Persistence)</p>
           </div>
           <button onclick="downloadCSV()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs rounded-lg flex items-center gap-1.5 transition">
             <i data-lucide="download" class="w-3.5 h-3.5"></i> Экспорт CSV
           </button>
         </div>
         
-        <div class="flex-1 min-h-[360px] relative">
+        <div class="flex-1 min-h-[380px] relative">
           <canvas id="forecastChart"></canvas>
         </div>
       </div>
 
-      <!-- Dispatcher Briefing & Alerts Column (1 col) -->
+      <!-- Dispatcher Briefing & Events Column (1 col) -->
       <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
         <div>
           <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
             <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
-              <i data-lucide="file-text" class="w-4 h-4 text-emerald-400"></i> Диспетчерский бриф
+              <i data-lucide="file-text" class="w-4 h-4 text-emerald-400"></i> Диспетчерский аудит
             </h3>
             <div class="flex text-xs rounded bg-slate-800 p-0.5 border border-slate-700">
               <button id="langRu" onclick="switchLang('ru')" class="px-2 py-0.5 rounded bg-slate-700 text-white font-medium">RU</button>
@@ -201,19 +203,26 @@
             </div>
           </div>
 
-          <div id="briefContent" class="text-xs text-slate-300 leading-relaxed space-y-2 whitespace-pre-line bg-slate-950/60 p-3 rounded-lg border border-slate-800/80 min-h-[160px]">
+          <div id="briefContent" class="text-xs text-slate-300 leading-relaxed space-y-2 whitespace-pre-line bg-slate-950/60 p-3 rounded-lg border border-slate-800/80 min-h-[140px]">
             Нажмите «Запустить Агента», чтобы выполнить расчет прогноза и сформировать аудиторский отчёт для системного оператора KEGOC.
           </div>
 
-          <!-- Alert Container -->
-          <div class="mt-4 space-y-2" id="alertsList"></div>
+          <!-- Actionable Events List -->
+          <div class="mt-4">
+            <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-amber-400"></i> Оперативные события & рекомендации:
+            </h4>
+            <div class="space-y-2 max-h-[180px] overflow-y-auto pr-1" id="eventsList">
+              <p class="text-[11px] text-slate-500 italic">Событий с высоким риском не зафиксировано.</p>
+            </div>
+          </div>
         </div>
 
         <!-- Simulation CTA -->
         <div class="mt-6 pt-4 border-t border-slate-800/80">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-xs font-medium text-slate-200">Бэктест за весь февраль</p>
+              <p class="text-xs font-medium text-slate-200">Бэктест всего февраля 2026</p>
               <p class="text-[10px] text-slate-500">28 последовательных прогнозов</p>
             </div>
             <button onclick="runFebruarySimulation()" class="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 text-xs font-medium rounded-lg flex items-center gap-1.5 transition">
@@ -246,6 +255,7 @@
       document.getElementById('langKz').className = lang === 'kz' ? 'px-2 py-0.5 rounded bg-slate-700 text-white font-medium' : 'px-2 py-0.5 rounded text-slate-400';
       if (currentData && currentData.audit) {
         document.getElementById('briefContent').innerText = lang === 'ru' ? currentData.audit.dispatcher_brief_ru : currentData.audit.dispatcher_brief_kz;
+        renderEvents(currentData.audit.events || []);
       }
     }
 
@@ -260,11 +270,7 @@
       lucide.createIcons();
 
       try {
-        const resp = await fetch('/api/forecast', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_date: date, horizon_hours: horizon, turbine_id: turbine })
-        });
+        const resp = await fetch(`/api/forecast?target_date=${date}&horizon_hours=${horizon}&turbine_id=${turbine}`);
         const data = await resp.json();
         currentData = data;
         renderDashboard(data);
@@ -279,53 +285,80 @@
 
     function renderDashboard(data) {
       const audit = data.audit;
+      const meta = data.metadata;
+      const bench = data.benchmark;
+
       document.getElementById('kpiGeneration').innerText = `${audit.total_generation_mwh} МВт·ч`;
       document.getElementById('kpiCapacityFactor').innerText = `${audit.capacity_factor_pct}%`;
       document.getElementById('kpiPenalty').innerText = `${audit.estimated_penalty_saved_kzt.toLocaleString()} ₸`;
+      document.getElementById('kpiCapacityLabel').innerText = `Установленная мощность: ${meta.rated_capacity_mw} МВт (${meta.turbine_name})`;
 
-      const statusEl = document.getElementById('kpiStatus');
-      const alertCountEl = document.getElementById('kpiAlertCount');
-      if (audit.alerts.storm_cutout_detected) {
-        statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 pulse-dot"></span> Шторм (v >= 25 м/с)`;
-        statusEl.className = "text-sm font-semibold text-red-400 flex items-center gap-1.5";
+      // Benchmark card
+      if (bench) {
+        document.getElementById('kpiSkillScore').innerText = `${bench.skill_score_index}`;
+        document.getElementById('kpiModelComparison').innerText = `MAE vs Физика: ${bench.mae_model_vs_physics}`;
+        document.getElementById('provenanceBadge').innerText = `Данные: ${bench.data_provenance} (m/s)`;
+      }
+
+      // Status badge
+      const statusBadge = document.getElementById('agentStatusBadge');
+      if (audit.agent_status === 'CRITICAL_SHUTDOWN') {
+        statusBadge.innerText = 'Аварийный останов (Шторм)';
+        statusBadge.className = 'text-[11px] px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/30';
+      } else if (audit.agent_status === 'ADVISORY_ATTENTION') {
+        statusBadge.innerText = 'Внимание диспетчера';
+        statusBadge.className = 'text-[11px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30';
       } else {
-        statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span> Штатный режим`;
-        statusEl.className = "text-sm font-semibold text-emerald-400 flex items-center gap-1.5";
+        statusBadge.innerText = 'Штатный режим';
+        statusBadge.className = 'text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30';
       }
 
       switchLang(activeLang);
-
-      // Render alerts
-      const alertsContainer = document.getElementById('alertsList');
-      alertsContainer.innerHTML = '';
-      if (audit.alerts.storm_cutout_detected) {
-        alertsContainer.innerHTML += `
-          <div class="p-2.5 rounded bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
-            <i data-lucide="alert-triangle" class="w-4 h-4 text-red-400 shrink-0"></i>
-            <span>Штормовое отключение в часы: ${audit.alerts.storm_hours.join(', ')}</span>
-          </div>`;
-      }
-      if (audit.alerts.icing_risk_detected) {
-        alertsContainer.innerHTML += `
-          <div class="p-2.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs flex items-center gap-2">
-            <i data-lucide="snowflake" class="w-4 h-4 text-blue-400 shrink-0"></i>
-            <span>Обледенение лопастей в часы: ${audit.alerts.icing_hours.join(', ')}</span>
-          </div>`;
-      }
-      lucide.createIcons();
-
-      // Render Chart
-      renderChart(data.timeline);
+      renderChart(data.timeline, meta.rated_capacity_mw);
     }
 
-    function renderChart(timeline) {
+    function renderEvents(events) {
+      const el = document.getElementById('eventsList');
+      if (!events || events.length === 0) {
+        el.innerHTML = '<p class="text-[11px] text-slate-500 italic">Событий с высоким риском не зафиксировано. Ветровой режим штатный.</p>';
+        return;
+      }
+
+      el.innerHTML = events.map(ev => {
+        const isCrit = ev.severity === 'CRITICAL';
+        const color = isCrit ? 'red' : 'amber';
+        const title = activeLang === 'ru' ? ev.title_ru : ev.title_kz;
+        const detail = activeLang === 'ru' ? ev.detail_ru : ev.detail_kz;
+        const action = activeLang === 'ru' ? ev.action_ru : ev.action_kz;
+        const timeShort = ev.timestamp.split('T')[1] || ev.timestamp.split(' ')[1] || `${ev.hour_index}:00`;
+
+        return `
+          <div class="p-2.5 rounded bg-${color}-500/10 border border-${color}-500/30 text-xs space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-${color}-400 flex items-center gap-1">
+                <i data-lucide="${isCrit ? 'alert-octagon' : 'alert-triangle'}" class="w-3.5 h-3.5"></i> ${title}
+              </span>
+              <span class="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">${timeShort}</span>
+            </div>
+            <p class="text-[11px] text-slate-300">${detail}</p>
+            <p class="text-[10px] text-${color}-300/90 font-medium">➡️ Действие: ${action}</p>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function renderChart(timeline, ratedMw) {
       const labels = timeline.map(t => t.timestamp.split('T')[1] || t.timestamp.split(' ')[1] || `${t.hour_index}:00`);
-      const powerData = timeline.map(t => t.predicted_mwh);
-      const wind100Data = timeline.map(t => t.wind_speed_100m);
-      const wind10Data = timeline.map(t => t.wind_speed_10m);
+      const powerMl = timeline.map(t => t.predicted_mwh);
+      const powerPhys = timeline.map(t => t.physics_mwh);
+      const powerPers = timeline.map(t => t.persistence_mwh);
+      const wind100 = timeline.map(t => t.wind_speed_100m);
 
       const ctx = document.getElementById('forecastChart').getContext('2d');
       if (chartInstance) chartInstance.destroy();
+
+      const yMax = Math.max(ratedMw * 1.08, 1.0);
 
       chartInstance = new Chart(ctx, {
         type: 'line',
@@ -333,31 +366,40 @@
           labels: labels,
           datasets: [
             {
-              label: 'Активная выработка ВЭС (МВт)',
-              data: powerData,
+              label: 'LightGBM Agent (МВт)',
+              data: powerMl,
               borderColor: '#10b981',
-              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+              backgroundColor: 'rgba(16, 185, 129, 0.18)',
               fill: true,
               yAxisID: 'yPower',
               tension: 0.35,
               borderWidth: 2.5
             },
             {
-              label: 'Скорость ветра 100м ступица (м/с)',
-              data: wind100Data,
+              label: 'Физическая кривая IEC (МВт)',
+              data: powerPhys,
+              borderColor: '#f59e0b',
+              borderDash: [5, 4],
+              yAxisID: 'yPower',
+              tension: 0.3,
+              borderWidth: 1.8
+            },
+            {
+              label: 'Persistence Baseline (МВт)',
+              data: powerPers,
+              borderColor: '#94a3b8',
+              borderDash: [2, 3],
+              yAxisID: 'yPower',
+              tension: 0.0,
+              borderWidth: 1.2
+            },
+            {
+              label: 'Ветер 100м ступица (м/с)',
+              data: wind100,
               borderColor: '#38bdf8',
-              borderDash: [4, 4],
               yAxisID: 'yWind',
               tension: 0.3,
               borderWidth: 2
-            },
-            {
-              label: 'Скорость ветра 10м (м/с)',
-              data: wind10Data,
-              borderColor: '#64748b',
-              yAxisID: 'yWind',
-              tension: 0.3,
-              borderWidth: 1.5
             }
           ]
         },
@@ -377,7 +419,7 @@
               grid: { color: 'rgba(51, 65, 85, 0.3)' },
               ticks: { color: '#10b981' },
               min: 0,
-              max: 5.2
+              max: yMax
             },
             yWind: {
               type: 'linear',
@@ -385,7 +427,8 @@
               title: { display: true, text: 'Ветер (м/с)', color: '#38bdf8' },
               grid: { drawOnChartArea: false },
               ticks: { color: '#38bdf8' },
-              min: 0
+              min: 0,
+              suggestedMax: 26
             }
           },
           plugins: {
@@ -400,15 +443,17 @@
     function downloadCSV() {
       const date = document.getElementById('targetDate').value;
       const horizon = document.getElementById('horizonHours').value;
-      window.location.href = `/api/export/csv?target_date=${date}&horizon_hours=${horizon}`;
+      const turbine = document.getElementById('turbineSelect').value;
+      window.location.href = `/api/export/csv?target_date=${date}&horizon_hours=${horizon}&turbine_id=${turbine}`;
     }
 
     async function runFebruarySimulation() {
-      alert('Запуск последовательной 28-дневной симуляции тестового периода (Февраль 2026)...');
+      const turbine = document.getElementById('turbineSelect').value;
+      alert(`Запуск последовательной 28-дневной симуляции тестового периода (Февраль 2026) для ${turbine}...`);
       try {
-        const resp = await fetch('/api/simulation/february');
+        const resp = await fetch(`/api/simulation/february?turbine_id=${turbine}`);
         const data = await resp.json();
-        alert(`Симуляция за февраль 2026 успешно выполнена!\nВсего дней: ${data.total_days}\nСуммарная выработка кластера: ${data.total_monthly_mwh} МВт·ч\nСредняя выработка в сутки: ${data.mean_daily_mwh} МВт·ч`);
+        alert(`Симуляция за февраль 2026 успешно выполнена!\nВсего дней: ${data.total_days}\nСуммарная выработка: ${data.total_monthly_mwh} МВт·ч (Физический baseline: ${data.total_physics_mwh} МВт·ч)\nСредняя выработка в сутки: ${data.mean_daily_mwh} МВт·ч`);
       } catch (err) {
         alert('Ошибка симуляции: ' + err.message);
       }

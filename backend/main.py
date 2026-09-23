@@ -17,8 +17,8 @@ from backend.agent.weather_tool import TURBINES
 
 app = FastAPI(
     title="Samruk WindAgent AI",
-    description="Agentic AI for Wind Power Plant Generation Forecasting (Samruk-Kazyna)",
-    version="1.0.0"
+    description="Agentic AI for Wind Power Plant Generation Forecasting (Samruk-Kazyna - Shelek Wind Farm)",
+    version="2.0.0"
 )
 
 app.add_middleware(
@@ -48,7 +48,7 @@ def get_turbines():
     return {"status": "SUCCESS", "turbines": TURBINES}
 
 @app.post("/api/forecast")
-def generate_forecast(req: ForecastRequest):
+def generate_forecast_post(req: ForecastRequest):
     try:
         p = get_pipeline()
         result = p.run_forecast_cycle(
@@ -60,28 +60,50 @@ def generate_forecast(req: ForecastRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/simulation/february")
-def get_february_simulation():
+@app.get("/api/forecast")
+def generate_forecast_get(
+    target_date: str = Query("2026-02-14", description="Start date YYYY-MM-DD"),
+    horizon_hours: int = Query(48, ge=1, le=168, description="Horizon in hours (24 or 48)"),
+    turbine_id: str = Query("turbine_1", description="turbine_1, turbine_2, or farm")
+):
     try:
         p = get_pipeline()
-        return p.run_full_february_simulation()
+        result = p.run_forecast_cycle(
+            target_date=target_date,
+            horizon_hours=horizon_hours,
+            turbine_id=turbine_id
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/simulation/february")
+def get_february_simulation(turbine_id: str = Query("farm", description="turbine_1, turbine_2, or farm")):
+    try:
+        p = get_pipeline()
+        return p.run_full_february_simulation(turbine_id=turbine_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/export/csv")
-def export_forecast_csv(target_date: str = "2026-02-14", horizon_hours: int = 48):
+def export_forecast_csv(
+    target_date: str = Query("2026-02-14", description="Start date YYYY-MM-DD"),
+    horizon_hours: int = Query(48, ge=1, le=168, description="Horizon in hours (24 or 48)"),
+    turbine_id: str = Query("turbine_1", description="turbine_1, turbine_2, or farm")
+):
     """
     Downloads forecast data as CSV formatted for Samruk-Kazyna evaluation.
+    Correctly accounts for selected turbine ID and rated capacity.
     """
     p = get_pipeline()
-    res = p.run_forecast_cycle(target_date=target_date, horizon_hours=horizon_hours)
+    res = p.run_forecast_cycle(target_date=target_date, horizon_hours=horizon_hours, turbine_id=turbine_id)
     df = pd.DataFrame(res["timeline"])
     
     stream = io.StringIO()
     df.to_csv(stream, index=False)
     
     response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
-    response.headers["Content-Disposition"] = f"attachment; filename=wind_forecast_{target_date}.csv"
+    response.headers["Content-Disposition"] = f"attachment; filename=wind_forecast_{turbine_id}_{target_date}.csv"
     return response
 
 @app.get("/", response_class=HTMLResponse)
@@ -98,6 +120,8 @@ def serve_dashboard():
 
 if __name__ == "__main__":
     import uvicorn
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8000"))
     # Initialize model upon startup
     get_pipeline()
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=host, port=port)

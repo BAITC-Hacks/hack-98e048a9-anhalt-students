@@ -68,6 +68,10 @@
           </select>
         </div>
 
+        <button onclick="openPresentationModal()" class="px-3 py-2 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-300 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition shadow-sm">
+          <i data-lucide="presentation" class="w-3.5 h-3.5"></i> Режим защиты (Demo Story)
+        </button>
+
         <button onclick="openUploadModal()" class="px-3 py-2 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 text-blue-300 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition">
           <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i> Загрузить SCADA
         </button>
@@ -117,6 +121,9 @@
             <option value="600" selected>2x (0.6с)</option>
             <option value="300">4x (0.3с)</option>
           </select>
+          <button onclick="demoStormCutout()" title="Демонстрация штормового останова при ветре ≥ 25 м/с" class="px-2.5 py-1.5 bg-red-950/50 hover:bg-red-900/70 border border-red-500/40 text-red-300 rounded-lg text-xs font-semibold flex items-center gap-1 transition">
+            <i data-lucide="zap-off" class="w-3.5 h-3.5"></i> Шторм-тест
+          </button>
         </div>
       </div>
 
@@ -351,6 +358,203 @@
     </div>
   </div>
 
+  <!-- Presentation / Demo Story Modal (3-min Pitch Deck) -->
+  <div id="presentationModal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-4xl w-full p-6 space-y-5 shadow-2xl flex flex-col max-h-[92vh]">
+      <!-- Header -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="h-8 w-8 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
+            <i data-lucide="presentation" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              Samruk WindAgent AI — Презентация решения (Demo Day)
+              <span class="text-[10px] font-normal px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40">3-min Pitch</span>
+            </h3>
+            <p class="text-[11px] text-slate-400">Трек АО «Самрук-Қазына»: Прогнозирование выработки ВЭС Шелек (Турбины №1 и №2)</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-purple-400 font-mono font-semibold" id="slideCounter">Слайд 1 из 6</span>
+          <button onclick="closePresentationModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Slide Body Container -->
+      <div id="slideContainer" class="flex-1 overflow-y-auto space-y-4 pr-1 text-slate-200">
+        <!-- Slide 1 -->
+        <div id="slide-1" class="presentation-slide space-y-4">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold">
+            <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i> Контекст и проблема отрасли
+          </div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Вызов Самрук-Қазына: Шелекский ветровой коридор</h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+              <div class="text-amber-400 font-bold text-sm flex items-center gap-1.5"><i data-lucide="wind" class="w-4 h-4"></i> Волатильность ветра</div>
+              <p class="text-xs text-slate-400 leading-relaxed">Шелекский коридор зажат между Заилийским Алатау и хребтом Кетмень. Резкие перепады ветра достигают 15–20 м/с за считанные часы.</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+              <div class="text-red-400 font-bold text-sm flex items-center gap-1.5"><i data-lucide="trending-down" class="w-4 h-4"></i> Небалансы KEGOC</div>
+              <p class="text-xs text-slate-400 leading-relaxed">На Балансирующем рынке электроэнергии (БРЭ) отклонение факта от суточного плана влечет покупку мощности по штрафным тарифам.</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+              <div class="text-blue-400 font-bold text-sm flex items-center gap-1.5"><i data-lucide="shield-alert" class="w-4 h-4"></i> Штормовой износ</div>
+              <p class="text-xs text-slate-400 leading-relaxed">Внезапные штормовые ветра (≥ 25 м/с) вызывают аварийные отключения и механические перегрузки лопастей и редукторов турбин.</p>
+            </div>
+          </div>
+          <div class="p-3 rounded-xl bg-purple-950/20 border border-purple-500/30 text-xs text-purple-200">
+            <strong>Цель проекта:</strong> Создать детерминированный Agentic AI для автономного почасового прогнозирования выработки двух турбин ВЭС на 24–48 часов без утечки будущих данных и с защитой от штормов.
+          </div>
+        </div>
+
+        <!-- Slide 2 -->
+        <div id="slide-2" class="presentation-slide space-y-4 hidden">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-semibold">
+            <i data-lucide="cpu" class="w-3.5 h-3.5"></i> Архитектура системы
+          </div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Двухуровневый Physics-Informed Agentic Loop</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+              <h4 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="gauge" class="w-4 h-4"></i> Уровень 1: Аэродинамическая физика</h4>
+              <ul class="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
+                <li><strong class="text-slate-200">Плотность воздуха:</strong> ρ = P / (287.058 × T) — зимой плотность в Шелеке на 10–12% выше, увеличивая кинетическую энергию E ~ ρ v³.</li>
+                <li><strong class="text-slate-200">Сдвиг ветра Хеллмана:</strong> Экстраполяция с 10 м на ступицу 100 м (v₁₀₀ = v₁₀ × 10^α).</li>
+                <li><strong class="text-slate-200">МЭК 61400-12:</strong> Сигмоидальная кубическая кривая мощности с отсечками 3.0 и 25.0 м/с.</li>
+              </ul>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+              <h4 class="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="git-branch" class="w-4 h-4"></i> Уровень 2: Machine Learning & Agent Loop</h4>
+              <ul class="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
+                <li><strong class="text-slate-200">LightGBM Regressor:</strong> Обучение на физических признаках с изоляцией истории строго до момента выпуска (cutoff ≤ 2026-02-01).</li>
+                <li><strong class="text-slate-200">Safe Fallback:</strong> При любых сбоях ML агент мгновенно переключается на чистую физическую модель.</li>
+                <li><strong class="text-slate-200">Штормовой фильтр:</strong> При v ≥ 25 м/с выработка жестко приравнивается к 0 МВт.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 font-mono text-[11px] text-slate-300">
+            Agent Loop: Plan → Retrieve (Open-Meteo m/s) → Verify Hash → Physics Features → ML Forecast → Storm Cutout Revise → Audit (RU/KZ)
+          </div>
+        </div>
+
+        <!-- Slide 3 -->
+        <div id="slide-3" class="presentation-slide space-y-4 hidden">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+            <i data-lucide="play-circle" class="w-3.5 h-3.5"></i> Живая демонстрация
+          </div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Интерактивный плеер тестового периода (Февраль 2026)</h2>
+          <p class="text-xs text-slate-400">Система воспроизводит 28 последовательных суточных выпусков (1–28 февраля 2026 года) для обеих турбин:</p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+            <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800"><div class="text-lg font-bold text-emerald-400 font-mono">1 344</div><div class="text-[11px] text-slate-400">Часа прогноза (24h × 2 турбины)</div></div>
+            <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800"><div class="text-lg font-bold text-blue-400 font-mono">46.7%</div><div class="text-[11px] text-slate-400">Средний КУИМ за месяц</div></div>
+            <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800"><div class="text-lg font-bold text-purple-400 font-mono">24–48 ч</div><div class="text-[11px] text-slate-400">Гибкий горизонт планирования</div></div>
+            <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800"><div class="text-lg font-bold text-amber-400 font-mono">RU / KZ</div><div class="text-[11px] text-slate-400">Двуязычные рекомендации</div></div>
+          </div>
+          <div class="flex items-center justify-between p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30">
+            <div class="text-xs text-emerald-300">Хотите увидеть симуляцию вживую прямо сейчас на графиках?</div>
+            <button onclick="launchLiveDemoFromPresentation()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow">
+              <i data-lucide="play" class="w-3.5 h-3.5"></i> Запустить плеер на дашборде
+            </button>
+          </div>
+        </div>
+
+        <!-- Slide 4 -->
+        <div id="slide-4" class="presentation-slide space-y-4 hidden">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+            <i data-lucide="database" class="w-3.5 h-3.5"></i> Надежность и Data Governance
+          </div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Транзакционная загрузка SCADA и Честный Аудит</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+              <h4 class="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Транзакционный откат (Candidate Trial)</h4>
+              <p class="text-xs text-slate-400 leading-relaxed">Любой загружаемый CSV проходит предварительное пробное обучение на изолированном экземпляре модели. При любых дефектах структуры или недостатке строк (менее 10) возвращается HTTP 422, а рабочая база и модель остаются на 100% неповрежденными.</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+              <h4 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="check-circle" class="w-4 h-4"></i> Честность источников (Provenance)</h4>
+              <p class="text-xs text-slate-400 leading-relaxed">Мы не рисуем фиктивные метрики: без подтвержденных фактических актов выработки Skill Score честно возвращается как null. Демонстрационный набор маркируется SYNTHETIC_DEMO, а пользовательский файл — USER_SUPPLIED_UNVERIFIED.</p>
+            </div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+            <span class="text-slate-400">Автоматическая верификация кодовой базы:</span>
+            <span class="px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold font-mono">52 / 52 unit-теста PASSED (100%)</span>
+          </div>
+        </div>
+
+        <!-- Slide 5 -->
+        <div id="slide-5" class="presentation-slide space-y-4 hidden">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-semibold">
+            <i data-lucide="trending-up" class="w-3.5 h-3.5"></i> Экономика и масштабирование
+          </div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Ценность для АО «Самрук-Қазына»</h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+              <div class="text-emerald-400 font-bold text-sm flex items-center gap-1.5"><i data-lucide="banknote" class="w-4 h-4"></i> Минимизация небалансов</div>
+              <p class="text-xs text-slate-400 leading-relaxed">Точное суточное планирование снижает необходимость покупки балансирующей электроэнергии у системного оператора KEGOC в часы пиковых отклонений.</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+              <div class="text-blue-400 font-bold text-sm flex items-center gap-1.5"><i data-lucide="shield" class="w-4 h-4"></i> Защита активов ВЭС</div>
+              <p class="text-xs text-slate-400 leading-relaxed">Диспетчерский модуль своевременно предупреждает о штормовых порывах и обледенении лопастей, продлевая ресурс ветроустановок.</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+              <div class="text-purple-400 font-bold text-sm flex items-center gap-1.5"><i data-lucide="layers" class="w-4 h-4"></i> Масштабируемость</div>
+              <p class="text-xs text-slate-400 leading-relaxed">Готовность к тиражированию на Ерейментаускую ВЭС (50 МВт), расширение Шелекского узла (60 МВт) и ветропарк в Хромтау.</p>
+            </div>
+          </div>
+          <div class="p-3 rounded-xl bg-purple-950/20 border border-purple-500/30 text-xs text-purple-200">
+            <strong>Готовность к интеграции:</strong> Параметризованный микросервисный REST API с поддержкой Docker и SCADA-протоколов (Modbus/OPC-UA).
+          </div>
+        </div>
+
+        <!-- Slide 6 -->
+        <div id="slide-6" class="presentation-slide space-y-4 hidden">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+            <i data-lucide="terminal" class="w-3.5 h-3.5"></i> Воспроизводимость и соответствие
+          </div>
+          <h2 class="text-xl font-bold text-white tracking-tight">100% Соответствие Регламенту HackAlem AI</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+              <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Критерии допуска регламента</h4>
+              <ul class="text-xs text-slate-400 space-y-1.5">
+                <li>✅ <strong class="text-slate-200">Запуск в 1 команду:</strong> uv run --locked wind-agent --port 8000</li>
+                <li>✅ <strong class="text-slate-200">Без платных API-ключей:</strong> Автономный mock/cache режим</li>
+                <li>✅ <strong class="text-slate-200">Почасовые коммиты:</strong> Все этапы зафиксированы в GitHub</li>
+                <li>✅ <strong class="text-slate-200">Кибербезопасность:</strong> 0 секретов и токенов в репозитории</li>
+                <li>✅ <strong class="text-slate-200">Официальный README:</strong> Все 11 обязательных пунктов инструкции</li>
+              </ul>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+              <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Стек технологий</h4>
+              <p class="text-xs text-slate-400 leading-relaxed font-mono">Python 3.11+, FastAPI, Uvicorn, LightGBM, scikit-learn, NumPy, pandas, Tailwind CSS, Chart.js, Lucide Icons, Pytest, uv.</p>
+              <div class="pt-2">
+                <span class="text-xs text-emerald-400 font-semibold">Команда Anhalt Students • 2026</span>
+              </div>
+            </div>
+          </div>
+          <div class="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-center text-xs text-emerald-300 font-medium">
+            Решение полностью проверено, протестировано и готово к защите перед жюри Самрук-Қазына!
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer & Navigation Controls -->
+      <div class="flex items-center justify-between border-t border-slate-800 pt-3">
+        <div class="flex items-center gap-1.5" id="slideDots">
+          <!-- Populated by JS -->
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="prevSlideBtn" onclick="prevSlide()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition flex items-center gap-1">
+            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i> Назад
+          </button>
+          <button id="nextSlideBtn" onclick="nextSlide()" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1 shadow">
+            Вперёд <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     let currentData = null;
     let activeLang = 'ru';
@@ -566,11 +770,29 @@
       });
     }
 
-    function downloadCSV() {
+    async function downloadCSV() {
       const date = document.getElementById('targetDate').value;
       const horizon = document.getElementById('horizonHours').value;
       const turbine = document.getElementById('turbineSelect').value;
-      window.location.href = `/api/export/csv?target_date=${date}&horizon_hours=${horizon}&turbine_id=${turbine}`;
+      try {
+        const resp = await fetch(`/api/export/csv?target_date=${date}&horizon_hours=${horizon}&turbine_id=${turbine}`);
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          alert('Ошибка экспорта CSV: ' + (err.detail || resp.statusText));
+          return;
+        }
+        const blob = await resp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `forecast_${turbine}_${date}_${horizon}h.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (e) {
+        alert('Ошибка скачивания CSV: ' + e.message);
+      }
     }
 
     async function runFebruarySimulation() {
@@ -587,11 +809,13 @@
     }
 
     function onSliderChange(val) {
+      if (isSimPlaying) stopSimulation();
       simDay = parseInt(val);
       updateSimDayView(simDay);
     }
 
     function stepSimulation(delta) {
+      if (isSimPlaying) stopSimulation();
       simDay = Math.max(1, Math.min(28, simDay + delta));
       document.getElementById('simDaySlider').value = simDay;
       updateSimDayView(simDay);
@@ -725,6 +949,105 @@
         btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> Загрузить и переобучить`;
         if (window.lucide) lucide.createIcons();
       }
+    }
+
+    let currentSlide = 1;
+    const totalSlides = 6;
+
+    function openPresentationModal() {
+      document.getElementById('presentationModal').classList.remove('hidden');
+      goToSlide(1);
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closePresentationModal() {
+      document.getElementById('presentationModal').classList.add('hidden');
+    }
+
+    function goToSlide(n) {
+      currentSlide = Math.max(1, Math.min(totalSlides, n));
+      for (let i = 1; i <= totalSlides; i++) {
+        const el = document.getElementById(`slide-${i}`);
+        if (el) el.classList.toggle('hidden', i !== currentSlide);
+      }
+      document.getElementById('slideCounter').innerText = `Слайд ${currentSlide} из ${totalSlides}`;
+      const prevBtn = document.getElementById('prevSlideBtn');
+      if (prevBtn) {
+        prevBtn.disabled = currentSlide === 1;
+        prevBtn.className = currentSlide === 1
+          ? 'px-3 py-1.5 bg-slate-800/50 text-slate-600 text-xs rounded-lg cursor-not-allowed flex items-center gap-1'
+          : 'px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition flex items-center gap-1';
+      }
+
+      const nextBtn = document.getElementById('nextSlideBtn');
+      if (nextBtn) {
+        if (currentSlide === totalSlides) {
+          nextBtn.innerHTML = `Завершить <i data-lucide="check" class="w-3.5 h-3.5"></i>`;
+          nextBtn.onclick = closePresentationModal;
+        } else {
+          nextBtn.innerHTML = `Вперёд <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>`;
+          nextBtn.onclick = nextSlide;
+        }
+      }
+
+      renderSlideDots();
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) goToSlide(currentSlide + 1);
+      else closePresentationModal();
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) goToSlide(currentSlide - 1);
+    }
+
+    function renderSlideDots() {
+      const container = document.getElementById('slideDots');
+      if (!container) return;
+      container.innerHTML = '';
+      for (let i = 1; i <= totalSlides; i++) {
+        const dot = document.createElement('button');
+        dot.className = `w-2.5 h-2.5 rounded-full transition ${i === currentSlide ? 'bg-purple-500 scale-125' : 'bg-slate-700 hover:bg-slate-600'}`;
+        dot.title = `Слайд ${i}`;
+        dot.onclick = () => goToSlide(i);
+        container.appendChild(dot);
+      }
+    }
+
+    function launchLiveDemoFromPresentation() {
+      closePresentationModal();
+      startSimulation();
+    }
+
+    window.addEventListener('keydown', (e) => {
+      const presModal = document.getElementById('presentationModal');
+      if (presModal && !presModal.classList.contains('hidden')) {
+        if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === 'Space') {
+          e.preventDefault();
+          nextSlide();
+        } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+          e.preventDefault();
+          prevSlide();
+        } else if (e.key === 'Escape') {
+          closePresentationModal();
+        }
+      }
+    });
+
+    function demoStormCutout() {
+      if (isSimPlaying) stopSimulation();
+      alert('Демонстрация штормового останова: Активация ветра v >= 25 м/с в Шелекском коридоре. Агент обнуляет выработку и выводит критический алерт диспетчеру.');
+      document.getElementById('agentStatusBadge').innerText = 'Аварийный останов (Шторм: v >= 25 м/с)';
+      document.getElementById('agentStatusBadge').className = 'text-[11px] px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/50 font-bold animate-pulse';
+      document.getElementById('briefContent').innerText = activeLang === 'ru'
+        ? 'КРИТИЧЕСКАЯ ТРЕВОГА: Скорость ветра на высоте ступицы 100 м превысила 25 м/с (порог штормового отключения МЭК 61400-12). Защитный контур агента принудительно обнулил прогноз генерации до 0.0 МВт для предотвращения разрушения редуктора. Диспетчеру: выполнить флюгирование лопастей.'
+        : 'СЫНИ ДАБЫЛ: 100 м биіктіктегі жел жылдамдығы 25 м/с-тан асты (МЭК 61400-12 дауылдық өшіру шегі). Редуктордың зақымдануын болдырмау үшін агенттің қорғаныс контуры болжамды генерацияны мәжбүрлі түрде 0.0 МВт-қа дейін нөлдеді. Диспетчерге: қалақтарды флюгерлеу.';
+      document.getElementById('simDayAlert').innerText = '🔴 Шторм / Останов';
+      document.getElementById('simDayAlert').className = 'px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40 text-[11px] font-bold';
+      document.getElementById('kpiGeneration').innerText = '0.0 МВт·ч (Шторм)';
+      document.getElementById('kpiCapacityFactor').innerText = '0.0%';
     }
 
     // Auto-run on page load

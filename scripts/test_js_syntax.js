@@ -18,7 +18,8 @@ try {
   const requiredFns = [
     'openUploadModal', 'closeUploadModal', 'submitScadaUpload', 'onFileSelected',
     'toggleSimulationPlay', 'startSimulation', 'stopSimulation', 'onSliderChange',
-    'stepSimulation', 'updateSimDayView', 'runAgentForecast', 'renderDashboard'
+    'stepSimulation', 'updateSimDayView', 'runAgentForecast', 'renderDashboard',
+    'openPresentationModal', 'closePresentationModal', 'goToSlide'
   ];
   for (const fn of requiredFns) {
     if (!code.includes(`function ${fn}`)) {

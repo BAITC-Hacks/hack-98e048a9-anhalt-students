@@ -174,13 +174,20 @@ def export_forecast_csv(req: Annotated[ForecastRequest, Depends()]):
 
 
 @app.get("/api/export/submission")
-def export_submission_csv():
-    """Return 28 daily 24-hour windows for each turbine, generated without file writes."""
+def export_submission_csv(
+    walkforward: bool = False,
+    horizon_hours: int = 24
+):
+    """Return 28 or 29 walk-forward daily windows for each turbine, generated without file writes."""
     from scripts.run_february_test import build_submission
 
     try:
-        frame, _ = build_submission(get_pipeline())
-        return _csv_response(frame, "submission_forecast_february_2026.csv")
+        start_date = "2026-01-31" if walkforward else "2026-02-01"
+        days = 29 if walkforward else 28
+        h = 48 if walkforward else horizon_hours
+        frame, _ = build_submission(get_pipeline(), horizon_hours=h, start_date=start_date, days=days)
+        filename = "submission_forecast_february_2026_v2.csv" if walkforward else "submission_forecast_february_2026.csv"
+        return _csv_response(frame, filename)
     except Exception as exc:
         logger.exception("Submission export failed")
         raise HTTPException(status_code=500, detail="February submission could not be generated.") from exc

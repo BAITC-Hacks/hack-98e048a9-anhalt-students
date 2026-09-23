@@ -18,7 +18,7 @@ try {
   const requiredFns = [
     'openUploadModal', 'closeUploadModal', 'submitScadaUpload', 'onFileSelected',
     'toggleSimulationPlay', 'playFromDayOne', 'startSimulation', 'stopSimulation', 'onSliderChange',
-    'stepSimulation', 'updateSimDayView', 'runAgentForecast', 'renderDashboard',
+    'stepSimulation', 'updateSimDayView', 'runAgentForecast', 'renderDashboard', 'renderDashboardError',
     'openPresentationModal', 'closePresentationModal', 'goToSlide', 'demoStormCutout'
   ];
   for (const fn of requiredFns) {

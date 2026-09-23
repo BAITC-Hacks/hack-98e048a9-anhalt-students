@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT))
 DEFAULT_OUTPUT = ROOT / "data" / "submission_forecast_february_2026.csv"
 
 
-def build_submission(pipeline=None, horizon_hours: int = 24):
+def build_submission(pipeline=None, horizon_hours: int = 24, start_date: str = "2026-02-01", days: int = 28):
     """Return a CSV frame and summary without writing any output files."""
     if horizon_hours not in (24, 48):
         raise ValueError("February submission horizon must be 24 or 48 hours")
@@ -28,10 +28,11 @@ def build_submission(pipeline=None, horizon_hours: int = 24):
 
         pipeline = SamrukWindAgentPipeline()
 
+    start_dt = pd.Timestamp(start_date)
+    origins = [(start_dt + pd.Timedelta(days=d)).strftime("%Y-%m-%d") for d in range(days)]
     rows = []
     daily_summaries = []
-    for day in range(1, 29):
-        origin = f"2026-02-{day:02d}"
+    for origin in origins:
         for turbine_id in ("turbine_1", "turbine_2"):
             result = pipeline.run_forecast_cycle(
                 target_date=origin, horizon_hours=horizon_hours, turbine_id=turbine_id
@@ -79,14 +80,16 @@ def build_submission(pipeline=None, horizon_hours: int = 24):
     total_mwh = float(accounting_rows["predicted_mwh"].sum())
     summary = {
         "month": "2026-02",
-        "forecast_origins": 28,
+        "start_date": origins[0],
+        "end_date": origins[-1],
+        "forecast_origins": len(origins),
         "turbines": 2,
         "horizon_hours": horizon_hours,
         "rows": len(frame),
         "monthly_accounting_turbine_hours": len(accounting_rows),
-        "monthly_accounting_calendar_hours": 28 * 24,
+        "monthly_accounting_calendar_hours": len(origins) * 24,
         "monthly_forecast_generation_mwh": round(total_mwh, 3),
-        "forecast_capacity_factor_pct": round(total_mwh / (28 * 24 * 5.0) * 100, 3),
+        "forecast_capacity_factor_pct": round(total_mwh / (len(origins) * 24 * 5.0) * 100, 3),
         "weather_sources": sorted(frame["weather_source"].unique().tolist()),
         "training_data_sources": sorted(frame["training_data_source"].unique().tolist()),
         "evaluation_status": "UNVERIFIED_NO_ACTUALS",
@@ -105,17 +108,17 @@ def build_submission(pipeline=None, horizon_hours: int = 24):
     return frame, summary
 
 
-def run_test(output_path=DEFAULT_OUTPUT, horizon_hours: int = 24, pipeline=None):
+def run_test(output_path=DEFAULT_OUTPUT, horizon_hours: int = 24, pipeline=None, start_date: str = "2026-02-01", days: int = 28):
     """Write forecast rows and a companion summary; return the summary for callers."""
     load_dotenv(ROOT / ".env", override=False)
     os.environ.setdefault("DEMO_MOCK_MODE", "true")
-    frame, summary = build_submission(pipeline, horizon_hours)
+    frame, summary = build_submission(pipeline, horizon_hours, start_date, days)
     output_path = Path(output_path).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(output_path, index=False)
     summary_path = output_path.with_suffix(".summary.json")
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Forecast replay completed: {len(frame):,} rows; {horizon_hours}h windows for two turbines.")
+    print(f"Forecast replay completed: {len(frame):,} rows; {horizon_hours}h windows for two turbines ({len(summary['daily_breakdown']) // 2} origins).")
     print(f"CSV: {output_path}")
     print(f"Summary: {summary_path}")
     print(f"February forecast energy (non-overlapping): {summary['monthly_forecast_generation_mwh']:,.3f} MWh")
@@ -132,11 +135,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="CSV output path (existing file will be replaced)")
     parser.add_argument("--horizon-hours", type=int, choices=(24, 48), default=24)
+    parser.add_argument("--start-date", type=str, default="2026-02-01", help="Start origin date (e.g. 2026-01-31)")
+    parser.add_argument("--days", type=int, default=28, help="Number of daily origins (default: 28)")
+    parser.add_argument("--walkforward-29", action="store_true", help="Run 29 walk-forward 48h cycles (2026-01-31 to 2026-02-28 = 2,784 rows)")
     parser.add_argument("--mock", action="store_true", help="Force deterministic offline weather")
     args = parser.parse_args()
     if args.mock:
         os.environ["DEMO_MOCK_MODE"] = "true"
-    run_test(args.output, args.horizon_hours)
+    start_date = "2026-01-31" if args.walkforward_29 else args.start_date
+    days = 29 if args.walkforward_29 else args.days
+    horizon = 48 if args.walkforward_29 else args.horizon_hours
+    run_test(args.output, horizon, start_date=start_date, days=days)
 
 
 if __name__ == "__main__":

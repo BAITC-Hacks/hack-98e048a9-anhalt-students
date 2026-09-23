@@ -1,13 +1,15 @@
 {
   "month": "2026-02",
-  "forecast_origins": 28,
+  "start_date": "2026-01-31",
+  "end_date": "2026-02-28",
+  "forecast_origins": 29,
   "turbines": 2,
-  "horizon_hours": 24,
-  "rows": 1344,
-  "monthly_accounting_turbine_hours": 1344,
-  "monthly_accounting_calendar_hours": 672,
-  "monthly_forecast_generation_mwh": 1568.097,
-  "forecast_capacity_factor_pct": 46.67,
+  "horizon_hours": 48,
+  "rows": 2784,
+  "monthly_accounting_turbine_hours": 1392,
+  "monthly_accounting_calendar_hours": 696,
+  "monthly_forecast_generation_mwh": 1628.907,
+  "forecast_capacity_factor_pct": 46.808,
   "weather_sources": [
     "MOCK_MODE_SYNTHESIS"
   ],
@@ -26,6 +28,18 @@
     "No SCADA actuals or verified imbalance prices: accuracy and financial savings are not evaluated."
   ],
   "daily_breakdown": [
+    {
+      "date": "2026-01-31",
+      "turbine_id": "turbine_1",
+      "forecast_generation_first_24h_mwh": 30.405,
+      "agent_status": "ADVISORY_ATTENTION"
+    },
+    {
+      "date": "2026-01-31",
+      "turbine_id": "turbine_2",
+      "forecast_generation_first_24h_mwh": 30.405,
+      "agent_status": "ADVISORY_ATTENTION"
+    },
     {
       "date": "2026-02-01",
       "turbine_id": "turbine_1",

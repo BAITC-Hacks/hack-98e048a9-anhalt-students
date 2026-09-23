@@ -251,7 +251,7 @@ def test_frontend_js_syntax_via_node():
     required_fns = [
         "openUploadModal", "closeUploadModal", "submitScadaUpload", "onFileSelected",
         "toggleSimulationPlay", "playFromDayOne", "startSimulation", "stopSimulation", "onSliderChange",
-        "stepSimulation", "updateSimDayView", "runAgentForecast", "renderDashboard",
+        "stepSimulation", "updateSimDayView", "runAgentForecast", "renderDashboard", "renderDashboardError",
         "openPresentationModal", "closePresentationModal", "goToSlide", "demoStormCutout"
     ]
     for fn in required_fns:
@@ -273,6 +273,22 @@ def test_demo_storm_endpoint_returns_cutout_forecast(api):
     assert data["status"] == "SUCCESS"
     assert len(data["timeline"]) == 24
     assert all(row["predicted_mwh"] == 0.0 for row in data["timeline"])
+
+
+def test_walkforward_29_origins_48h_submission():
+    frame, summary = build_submission(StubPipeline(), horizon_hours=48, start_date="2026-01-31", days=29)
+    assert len(frame) == 2784  # 29 origins x 48 hours x 2 turbines = 2784 rows
+    assert summary["forecast_origins"] == 29
+    assert summary["start_date"] == "2026-01-31"
+    assert summary["end_date"] == "2026-02-28"
+
+
+def test_export_submission_endpoint_supports_walkforward(api):
+    client, pipeline = api
+    resp = client.get("/api/export/submission?walkforward=true")
+    assert resp.status_code == 200
+    assert "submission_forecast_february_2026_v2.csv" in resp.headers.get("content-disposition", "")
+
 
 
 

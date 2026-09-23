@@ -1,4 +1,4 @@
-﻿"""Regression tests for provenance, chronology, weather units and physical bounds."""
+"""Regression tests for provenance, chronology, weather units and physical bounds."""
 
 from datetime import date
 import json
@@ -223,3 +223,61 @@ def test_legacy_unverified_cache_is_not_reused(remote_weather, monkeypatch, tmp_
 def test_invalid_weather_dates_are_rejected(remote_weather, start, end):
     with pytest.raises(ValueError):
         remote_weather.fetch_forecast(43.6, 78.5, start, end)
+
+
+def test_pipeline_transactional_retraining_preserves_state_on_failure(tmp_path):
+    from backend.agent.pipeline import SamrukWindAgentPipeline
+
+    pipe = SamrukWindAgentPipeline()
+    orig_history_len = len(pipe.history)
+    orig_model = pipe.model
+
+    target_csv = tmp_path / "candidate_scada.csv"
+    target_csv.write_text("dummy_content_to_protect", encoding="utf-8")
+
+    # Candidate with fewer than 10 rows prior to cutoff
+    dates = pd.date_range("2026-02-15", periods=5, freq="h")
+    bad_df = pd.DataFrame({
+        "time": dates,
+        "normalized_power": [0.5] * 5,
+        "temperature_2m": [5.0] * 5,
+        "wind_speed_10m": [8.0] * 5,
+        "wind_speed_100m": [10.0] * 5,
+    })
+    bad_df.attrs.update(data_source="USER_SUPPLIED_UNVERIFIED", is_verified=False)
+
+    with pytest.raises(ValueError, match="At least 10 historical records"):
+        pipe.update_history_and_retrain(bad_df, target_path=str(target_csv))
+
+    # Verify disk file was NOT overwritten with bad_df
+    assert target_csv.read_text(encoding="utf-8") == "dummy_content_to_protect"
+    # Verify in-memory history and model untouched
+    assert len(pipe.history) == orig_history_len
+    assert pipe.model is orig_model
+
+
+def test_pipeline_transactional_retraining_success(tmp_path):
+    from backend.agent.pipeline import SamrukWindAgentPipeline
+
+    pipe = SamrukWindAgentPipeline()
+    target_csv = tmp_path / "valid_scada.csv"
+
+    dates = pd.date_range("2026-01-01", periods=24, freq="h")
+    good_df = pd.DataFrame({
+        "time": dates,
+        "normalized_power": [0.65] * 24,
+        "temperature_2m": [-3.0] * 24,
+        "wind_speed_10m": [7.5] * 24,
+        "wind_speed_100m": [9.5] * 24,
+    })
+    good_df.attrs.update(data_source="USER_SUPPLIED_UNVERIFIED", is_verified=False)
+
+    metadata = pipe.update_history_and_retrain(good_df, target_path=str(target_csv))
+
+    assert metadata["retrained"] is True
+    assert metadata["data_source"] == "USER_SUPPLIED_UNVERIFIED"
+    assert target_csv.is_file()
+    assert len(pipe.history) == 24
+    assert pipe.history.attrs["data_source"] == "USER_SUPPLIED_UNVERIFIED"
+
+

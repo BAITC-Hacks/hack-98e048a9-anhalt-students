@@ -1,6 +1,7 @@
 """Bounded, auditable orchestration. Accuracy requires observed generation."""
 from datetime import datetime, timedelta, timezone
 import hashlib
+import os
 from threading import RLock
 from uuid import uuid4
 import numpy as np
@@ -223,12 +224,33 @@ class SamrukWindAgentPipeline:
                 "daily_breakdown": days,
                 "evaluation_status": "RETROSPECTIVE_SCENARIO_NOT_ACCURACY_BACKTEST", "forecast_issue_time_verified": False}
 
-    def reload_data_and_retrain(self):
-        """Thread-safe reload of historical SCADA dataset and LightGBM model retraining."""
+    def update_history_and_retrain(self, candidate_df: pd.DataFrame, target_path: str = None) -> dict:
+        """
+        Transactional update of historical data and forecasting model:
+        1. Test-train a fresh candidate model on candidate_df before modifying any state.
+        2. If training succeeds, safely write candidate_df to target_path (if provided).
+        3. Under self._lock, update self.model, self.history, self.training_metadata, and clear self._runs.
+        4. If anything fails (e.g. ValueError due to insufficient records), previous state and files are completely untouched.
+        """
+        candidate_model = WindForecastingModel()
+        metadata = candidate_model.train(candidate_df, cutoff="2026-02-01")
+
+        if target_path:
+            tmp_target = f"{target_path}.tmp"
+            candidate_df.to_csv(tmp_target, index=False)
+            os.replace(tmp_target, target_path)
+
         with self._lock:
-            self.history = get_or_create_historical_data()
-            self.training_metadata = self.model.train(self.history, cutoff="2026-02-01")
+            self.model = candidate_model
+            self.history = candidate_df.copy()
+            self.training_metadata = metadata
             self._training_cutoff = pd.Timestamp("2026-02-01")
             self._runs.clear()
-            return self.training_metadata
+
+        return dict(metadata, retrained=True)
+
+    def reload_data_and_retrain(self):
+        """Thread-safe reload of historical SCADA dataset with candidate rollback on failure."""
+        candidate_history = get_or_create_historical_data()
+        return self.update_history_and_retrain(candidate_history)
 

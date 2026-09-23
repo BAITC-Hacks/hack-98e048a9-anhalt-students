@@ -1,6 +1,7 @@
 """HTTP API and single-command dashboard entry point."""
 
 import argparse
+import hashlib
 import io
 import logging
 import os
@@ -184,17 +185,36 @@ async def upload_scada_data(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=f"Ошибка чтения CSV: {exc}") from exc
 
     try:
-        from backend.agent.data_loader import _validate_history, DATA_DIR
+        from backend.agent.data_loader import _validate_history, DATA_DIR, BUNDLED_DEMO_SHA256
         validated_df = _validate_history(df_raw)
     except ValueError as val_err:
         raise HTTPException(status_code=422, detail=f"Ошибка валидации колонок/данных SCADA: {val_err}") from val_err
 
-    target_path = Path(DATA_DIR) / "shelek_historical.csv"
-    validated_df.to_csv(target_path, index=False)
+    # Compute provenance honestly
+    norm_content = text.replace("\r\n", "\n").encode("utf-8")
+    digest = hashlib.sha256(norm_content).hexdigest()
+    synthetic = digest == BUNDLED_DEMO_SHA256 or (
+        "data_source" in validated_df and validated_df["data_source"].eq("SYNTHETIC_DEMO").all()
+    )
+    data_source = "SYNTHETIC_DEMO" if synthetic else "USER_SUPPLIED_UNVERIFIED"
+    validated_df.attrs.update({
+        "data_source": data_source,
+        "is_synthetic": True if synthetic else None,
+        "is_verified": False,
+        "source_file": file.filename,
+        "schema_validated": True,
+    })
 
+    target_path = str(Path(DATA_DIR) / "shelek_historical.csv")
     try:
         pipe = get_pipeline()
-        metadata = pipe.reload_data_and_retrain()
+        if hasattr(pipe, "update_history_and_retrain"):
+            metadata = pipe.update_history_and_retrain(validated_df, target_path=target_path)
+        else:
+            metadata = pipe.reload_data_and_retrain()
+    except ValueError as val_err:
+        # Pre-cutoff record deficiency or invalid numerical ranges in training
+        raise HTTPException(status_code=422, detail=f"Ошибка исторических данных для обучения: {val_err}") from val_err
     except Exception as exc:
         logger.exception("Retraining failed after CSV upload")
         raise HTTPException(status_code=500, detail=f"Ошибка переобучения модели: {exc}") from exc
@@ -209,9 +229,11 @@ async def upload_scada_data(file: UploadFile = File(...)):
         "columns": list(validated_df.columns),
         "mean_normalized_power": round(float(validated_df["normalized_power"].mean()), 4),
         "mean_wind_speed": round(float(validated_df[speed_col].mean()), 2),
-        "data_source": "USER_SUPPLIED_VERIFIED",
+        "data_source": data_source,
+        "is_verified": False,
+        "schema_validated": True,
         "training_metadata": metadata,
-        "message": "SCADA данные успешно загружены. Модели турбин переобучены и откалиброваны."
+        "message": f"SCADA данные проверены ({data_source}). Модель успешно переобучена."
     }
 
 

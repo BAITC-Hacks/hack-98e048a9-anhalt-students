@@ -98,7 +98,7 @@
               Интерактивный плеер тестового периода (1–28 февраля 2026)
               <span class="text-[10px] font-normal px-2 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">28 циклов</span>
             </h4>
-            <p class="text-[11px] text-slate-400">Последовательный бэктест суточных окон без утечки будущих данных (доступность погоды на момент выпуска t-1)</p>
+            <p class="text-[11px] text-slate-400">Ретроспективная симуляция суточных окон 1–28 февраля 2026 года (архив Open-Meteo, обучающая история ограничена моментом прогноза)</p>
           </div>
         </div>
 
@@ -309,10 +309,56 @@
     HackAlem AI 2026 • Команда Anhalt Students • Кейс: АО «Самрук-Қазына» (Agentic AI для ВЭС)
   </footer>
 
+  <!-- SCADA Upload Modal -->
+  <div id="uploadModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="database" class="w-5 h-5 text-emerald-400"></i>
+          <h3 class="text-sm font-bold text-white">Загрузка исторических данных SCADA (ВЭС Шелек)</h3>
+        </div>
+        <button onclick="closeUploadModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="text-xs text-slate-300 space-y-2">
+        <p>Загрузите официальный CSV файл с историческими измерениями выработки ВЭС (март 2023 – 31 января 2026).</p>
+        <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-400 space-y-1">
+          <p class="text-emerald-400 font-semibold">Обязательные колонки:</p>
+          <p>• <span class="text-slate-200">time</span>: ISO-формат времени (YYYY-MM-DD HH:00:00)</p>
+          <p>• <span class="text-slate-200">normalized_power</span>: Активная мощность [0.0 ... 1.0]</p>
+          <p>• <span class="text-slate-200">temperature_2m</span>: Температура окружающей среды (°C)</p>
+          <p>• <span class="text-slate-200">wind_speed_10m</span> или <span class="text-slate-200">wind_speed_100m</span>: Скорость ветра (м/с)</p>
+        </div>
+      </div>
+
+      <div class="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-emerald-500/50 transition bg-slate-950/40">
+        <input type="file" id="scadaFileInput" accept=".csv" class="hidden" onchange="onFileSelected(this)">
+        <label for="scadaFileInput" class="cursor-pointer flex flex-col items-center gap-2">
+          <i data-lucide="upload-cloud" class="w-8 h-8 text-slate-400"></i>
+          <span class="text-xs font-medium text-slate-200" id="uploadFilename">Нажмите для выбора CSV файла</span>
+          <span class="text-[10px] text-slate-500">Поддерживается формат UTF-8 / CP1251, до 50 МБ</span>
+        </label>
+      </div>
+
+      <div id="uploadFeedback" class="text-xs p-3 rounded-lg hidden"></div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <button onclick="closeUploadModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition">Отмена</button>
+        <button id="uploadSubmitBtn" onclick="submitScadaUpload()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i> Загрузить и переобучить
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let currentData = null;
     let activeLang = 'ru';
     let chartInstance = null;
+    let isSimPlaying = false;
+    let simTimer = null;
+    let simDay = 14;
+    let selectedScadaFile = null;
 
     if (window.lucide) lucide.createIcons();
 
@@ -539,60 +585,6 @@
         alert('Ошибка симуляции: ' + err.message);
       }
     }
-  </script>
-
-  <!-- SCADA Upload Modal -->
-  <div id="uploadModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div class="flex items-center gap-2">
-          <i data-lucide="database" class="w-5 h-5 text-emerald-400"></i>
-          <h3 class="text-sm font-bold text-white">Загрузка исторических данных SCADA (ВЭС Шелек)</h3>
-        </div>
-        <button onclick="closeUploadModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-      </div>
-
-      <div class="text-xs text-slate-300 space-y-2">
-        <p>Загрузите официальный CSV файл с историческими измерениями выработки ВЭС (март 2023 – 31 января 2026).</p>
-        <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-400 space-y-1">
-          <p class="text-emerald-400 font-semibold">Обязательные колонки:</p>
-          <p>• <span class="text-slate-200">time</span>: ISO-формат времени (YYYY-MM-DD HH:00:00)</p>
-          <p>• <span class="text-slate-200">normalized_power</span>: Активная мощность [0.0 ... 1.0]</p>
-          <p>• <span class="text-slate-200">temperature_2m</span>: Температура окружающей среды (°C)</p>
-          <p>• <span class="text-slate-200">wind_speed_10m</span> или <span class="text-slate-200">wind_speed_100m</span>: Скорость ветра (м/с)</p>
-        </div>
-      </div>
-
-      <div class="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-emerald-500/50 transition bg-slate-950/40">
-        <input type="file" id="scadaFileInput" accept=".csv" class="hidden" onchange="onFileSelected(this)">
-        <label for="scadaFileInput" class="cursor-pointer flex flex-col items-center gap-2">
-          <i data-lucide="upload-cloud" class="w-8 h-8 text-slate-400"></i>
-          <span class="text-xs font-medium text-slate-200" id="uploadFilename">Нажмите для выбора CSV файла</span>
-          <span class="text-[10px] text-slate-500">Поддерживается формат UTF-8 / CP1251, до 50 МБ</span>
-        </label>
-      </div>
-
-      <div id="uploadFeedback" class="text-xs p-3 rounded-lg hidden"></div>
-
-      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-        <button onclick="closeUploadModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition">Отмена</button>
-        <button id="uploadSubmitBtn" onclick="submitScadaUpload()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition">
-          <i data-lucide="check" class="w-3.5 h-3.5"></i> Загрузить и переобучить
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    let currentData = null;
-    let activeLang = 'ru';
-    let chartInstance = null;
-    let isSimPlaying = false;
-    let simTimer = null;
-    let simDay = 14;
-    let selectedScadaFile = null;
-
-    if (window.lucide) lucide.createIcons();
 
     function onSliderChange(val) {
       simDay = parseInt(val);
@@ -637,12 +629,20 @@
       }
     }
 
-    function startSimulation() {
+    async function startSimulation() {
+      if (isSimPlaying) return;
       isSimPlaying = true;
       document.getElementById('simPlayText').innerText = 'Пауза';
       document.getElementById('simPlayBtn').className = 'px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow transition';
-      const speed = parseInt(document.getElementById('simSpeed').value) || 600;
-      simTimer = setInterval(async () => {
+
+      if (simDay >= 28) {
+        simDay = 1;
+        document.getElementById('simDaySlider').value = simDay;
+        await updateSimDayView(simDay);
+      }
+
+      const stepLoop = async () => {
+        if (!isSimPlaying) return;
         if (simDay >= 28) {
           stopSimulation();
           return;
@@ -650,12 +650,19 @@
         simDay++;
         document.getElementById('simDaySlider').value = simDay;
         await updateSimDayView(simDay);
-      }, speed);
+        if (isSimPlaying) {
+          const speed = parseInt(document.getElementById('simSpeed').value) || 600;
+          simTimer = setTimeout(stepLoop, speed);
+        }
+      };
+
+      const speed = parseInt(document.getElementById('simSpeed').value) || 600;
+      simTimer = setTimeout(stepLoop, speed);
     }
 
     function stopSimulation() {
       isSimPlaying = false;
-      if (simTimer) clearInterval(simTimer);
+      if (simTimer) clearTimeout(simTimer);
       simTimer = null;
       document.getElementById('simPlayText').innerText = 'Воспроизвести февраль';
       document.getElementById('simPlayBtn').className = 'px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow transition';

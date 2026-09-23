@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 import io
 import json
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -50,7 +51,10 @@ class StubPipeline:
         return {"turbine_id": turbine_id}
 
     def reload_data_and_retrain(self):
-        return {"retrained": True, "data_source": "USER_SUPPLIED_VERIFIED"}
+        return {"retrained": True, "data_source": "USER_SUPPLIED_UNVERIFIED"}
+
+    def update_history_and_retrain(self, candidate_df, target_path=None):
+        return {"retrained": True, "rows": len(candidate_df), "data_source": "USER_SUPPLIED_UNVERIFIED"}
 
 
 @pytest.fixture
@@ -178,8 +182,44 @@ def test_upload_scada_valid_csv(api, tmp_path, monkeypatch):
     data = response.json()
     assert data["status"] == "SUCCESS"
     assert data["rows_count"] == 24
-    assert data["data_source"] == "USER_SUPPLIED_VERIFIED"
+    assert data["data_source"] == "USER_SUPPLIED_UNVERIFIED"
+    assert data["is_verified"] is False
+    assert data["schema_validated"] is True
     assert data["mean_normalized_power"] == 0.55
+
+
+def test_upload_scada_bundled_demo_is_synthetic(api, tmp_path, monkeypatch):
+    import backend.agent.data_loader as dl
+    monkeypatch.setattr(dl, "DATA_DIR", str(tmp_path))
+    client, _ = api
+    demo_file = Path("data/historical_wind.csv")
+    if demo_file.is_file():
+        content = demo_file.read_bytes()
+        files = {"file": ("demo.csv", io.BytesIO(content), "text/csv")}
+        response = client.post("/api/upload/scada", files=files)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["data_source"] == "SYNTHETIC_DEMO"
+        assert data["is_verified"] is False
+
+
+def test_upload_scada_training_value_error_returns_422(api, tmp_path, monkeypatch):
+    import backend.agent.data_loader as dl
+    monkeypatch.setattr(dl, "DATA_DIR", str(tmp_path))
+    client, pipeline = api
+
+    def failing_retrain(candidate_df, target_path=None):
+        raise ValueError("Insufficient training records prior to forecast cutoff")
+
+    monkeypatch.setattr(pipeline, "update_history_and_retrain", failing_retrain)
+    dates = pd.date_range("2026-02-10", periods=5, freq="h")
+    csv_content = "time,normalized_power,temperature_2m,wind_speed_10m\n" + "\n".join(
+        f"{d.isoformat()},0.55,-5.0,7.2" for d in dates
+    )
+    files = {"file": ("short_scada.csv", io.BytesIO(csv_content.encode("utf-8")), "text/csv")}
+    response = client.post("/api/upload/scada", files=files)
+    assert response.status_code == 422
+    assert "Ошибка исторических данных для обучения" in response.json()["detail"]
 
 
 def test_upload_scada_invalid_extension(api):
@@ -194,4 +234,14 @@ def test_upload_scada_invalid_content(api):
     files = {"file": ("test.csv", io.BytesIO(b"bad,csv,data\n1,2,3"), "text/csv")}
     response = client.post("/api/upload/scada", files=files)
     assert response.status_code == 422
+
+
+def test_frontend_js_syntax_via_node():
+    import subprocess
+    js_test_script = Path("scripts/test_js_syntax.js")
+    assert js_test_script.is_file(), "scripts/test_js_syntax.js must exist"
+    res = subprocess.run(["node", str(js_test_script)], capture_output=True, text=True)
+    assert "SUCCESS: Script parsed cleanly with zero syntax errors!" in res.stdout
+    assert "SUCCESS: All required UI functions are defined in the script!" in res.stdout
+
 

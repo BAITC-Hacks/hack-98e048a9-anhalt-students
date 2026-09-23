@@ -12,7 +12,14 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; }
+    body { font-family: 'Inter', sans-serif; background: #020617; color: #e2e8f0; margin: 0; }
+    main, header, footer { padding: 20px; }
+    button, input, select { font: inherit; }
+    button, select, input { background: #1e293b; color: #e2e8f0; padding: 6px; }
+    a { color: #6ee7b7; }
+    #agentTrace { white-space: pre-wrap; overflow-wrap: anywhere; }
+    #dataNotice { padding: 12px 0; }
+    #hourlyFallback { max-height: 400px; overflow: auto; white-space: pre; }
     .pulse-dot { animation: pulse 2s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
   </style>
@@ -71,6 +78,9 @@
   <!-- Main Content -->
   <main class="max-w-7xl mx-auto p-6 flex-1 w-full space-y-6">
 
+    <p id="dataNotice" role="status">Демонстрационный прогноз. Подтверждённые измерения для оценки точности не подключены.</p>
+    <label><input type="checkbox" id="refreshWeather"> Обновить погоду перед расчётом</label>
+    <details><summary>Журнал решений агента</summary><pre id="agentTrace"></pre></details>
     <!-- KPI Metric Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
@@ -97,9 +107,9 @@
 
       <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
         <div>
-          <p class="text-xs font-medium text-slate-400">Экономия штрафов KEGOC</p>
+          <p class="text-xs font-medium text-slate-400">Экономический эффект</p>
           <h3 id="kpiPenalty" class="text-2xl font-bold text-amber-400 mt-1">-- ₸</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5">Балансирующий рынок (14 500 ₸/МВт·ч)</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">Нужны фактические небалансы и цены</p>
         </div>
         <div class="h-10 w-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
           <i data-lucide="shield-check" class="w-5 h-5"></i>
@@ -150,7 +160,7 @@
           <span class="text-emerald-400 font-bold">3</span>
           <div>
             <p class="font-medium text-slate-300">Physics Baseline</p>
-            <p class="text-[10px] text-slate-500">Плотность ρ(T,P), IEC 61400-12</p>
+            <p class="text-[10px] text-slate-500">Плотность ρ(T,P), общая кривая мощности</p>
           </div>
         </div>
         <div class="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-start gap-2">
@@ -178,14 +188,14 @@
         <div class="flex items-center justify-between mb-4">
           <div>
             <h3 class="text-sm font-semibold text-slate-200">Почасовой профиль генерации и мультимодельное сравнение</h3>
-            <p class="text-xs text-slate-400">Сравнение: Physics-Informed LightGBM vs Физика IEC vs Навстречу (Persistence)</p>
+            <p class="text-xs text-slate-400">LightGBM и физическая модель. Persistence требует реальных измерений.</p>
           </div>
           <div class="flex items-center gap-2">
             <button onclick="downloadCSV()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs rounded-lg flex items-center gap-1.5 transition">
               <i data-lucide="download" class="w-3.5 h-3.5"></i> Суточный CSV
             </button>
             <a href="/api/export/submission" class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-400 text-xs font-medium rounded-lg flex items-center gap-1.5 transition">
-              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Сабмишн 28 дней (1344 ч)
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> CSV: 28 дней × 24 часа × 2 турбины
             </a>
           </div>
 
@@ -193,6 +203,7 @@
         
         <div class="flex-1 min-h-[380px] relative">
           <canvas id="forecastChart"></canvas>
+          <pre id="hourlyFallback" hidden></pre>
         </div>
       </div>
 
@@ -253,7 +264,7 @@
     let activeLang = 'ru';
     let chartInstance = null;
 
-    lucide.createIcons();
+    if (window.lucide) lucide.createIcons();
 
     function switchLang(lang) {
       activeLang = lang;
@@ -273,11 +284,13 @@
 
       btn.disabled = true;
       btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Агент рассчитывает...`;
-      lucide.createIcons();
+      if (window.lucide) lucide.createIcons();
 
       try {
-        const resp = await fetch(`/api/forecast?target_date=${date}&horizon_hours=${horizon}&turbine_id=${turbine}`);
+        const refresh = document.getElementById('refreshWeather').checked;
+        const resp = await fetch(`/api/forecast?target_date=${date}&horizon_hours=${horizon}&turbine_id=${turbine}&refresh_weather=${refresh}`);
         const data = await resp.json();
+        if (!resp.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
         currentData = data;
         renderDashboard(data);
       } catch (err) {
@@ -285,7 +298,7 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Запустить Агента`;
-        lucide.createIcons();
+        if (window.lucide) lucide.createIcons();
       }
     }
 
@@ -296,15 +309,17 @@
 
       document.getElementById('kpiGeneration').innerText = `${audit.total_generation_mwh} МВт·ч`;
       document.getElementById('kpiCapacityFactor').innerText = `${audit.capacity_factor_pct}%`;
-      document.getElementById('kpiPenalty').innerText = `${audit.estimated_penalty_saved_kzt.toLocaleString()} ₸`;
+      document.getElementById('kpiPenalty').innerText = audit.estimated_penalty_saved_kzt == null ? 'Не оценён' : `${audit.estimated_penalty_saved_kzt.toLocaleString()} ₸`;
       document.getElementById('kpiCapacityLabel').innerText = `Установленная мощность: ${meta.rated_capacity_mw} МВт (${meta.turbine_name})`;
 
       // Benchmark card
       if (bench) {
-        document.getElementById('kpiSkillScore').innerText = `${bench.skill_score_index}`;
-        document.getElementById('kpiModelComparison').innerText = `MAE vs Физика: ${bench.mae_model_vs_physics}`;
+        document.getElementById('kpiSkillScore').innerText = bench.skill_score_index == null ? 'Нет оценки' : `${bench.skill_score_index}`;
+        document.getElementById('kpiModelComparison').innerText = `Расхождение с физикой: ${bench.mae_model_vs_physics} (не ошибка прогноза)`;
         document.getElementById('provenanceBadge').innerText = `Данные: ${bench.data_provenance} (m/s)`;
       }
+      document.getElementById('dataNotice').innerText = `Обучение: ${meta.training_data_source}. Доступность погоды на момент исторического прогноза не подтверждена. Ревизия ${meta.revision}; ${meta.input_changed ? 'входные данные изменились, прогноз пересчитан' : 'новый расчёт или данные без изменений'}.`;
+      document.getElementById('agentTrace').textContent = (data.agent_trace || []).map(e => `${e.turbine_id || meta.turbine_id}: ${e.step} → ${e.action}: ${e.reason}`).join('\n');
 
       // Status badge
       const statusBadge = document.getElementById('agentStatusBadge');
@@ -351,11 +366,20 @@
           </div>
         `;
       }).join('');
-      lucide.createIcons();
+      if (window.lucide) lucide.createIcons();
     }
 
     function renderChart(timeline, ratedMw) {
-      const labels = timeline.map(t => t.timestamp.split('T')[1] || t.timestamp.split(' ')[1] || `${t.hour_index}:00`);
+      if (!window.Chart) {
+        document.getElementById('forecastChart').hidden = true;
+        const fallback = document.getElementById('hourlyFallback');
+        fallback.hidden = false;
+        fallback.textContent = 'Время (Asia/Almaty) | Прогноз (МВт·ч за час) | Физика (МВт·ч за час)\n' + timeline.map(t => `${t.timestamp} | ${t.predicted_mwh.toFixed(3)} | ${t.physics_mwh.toFixed(3)}`).join('\n');
+        return;
+      }
+      document.getElementById('forecastChart').hidden = false;
+      document.getElementById('hourlyFallback').hidden = true;
+      const labels = timeline.map(t => t.timestamp.replace('T', ' '));
       const powerMl = timeline.map(t => t.predicted_mwh);
       const powerPhys = timeline.map(t => t.physics_mwh);
       const powerPers = timeline.map(t => t.persistence_mwh);
@@ -382,7 +406,7 @@
               borderWidth: 2.5
             },
             {
-              label: 'Физическая кривая IEC (МВт)',
+              label: 'Общая физическая кривая (МВт)',
               data: powerPhys,
               borderColor: '#f59e0b',
               borderDash: [5, 4],
@@ -459,6 +483,7 @@
       try {
         const resp = await fetch(`/api/simulation/february?turbine_id=${turbine}`);
         const data = await resp.json();
+        if (!resp.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
         alert(`Симуляция за февраль 2026 успешно выполнена!\nВсего дней: ${data.total_days}\nСуммарная выработка: ${data.total_monthly_mwh} МВт·ч (Физический baseline: ${data.total_physics_mwh} МВт·ч)\nСредняя выработка в сутки: ${data.mean_daily_mwh} МВт·ч`);
       } catch (err) {
         alert('Ошибка симуляции: ' + err.message);

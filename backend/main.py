@@ -1,143 +1,193 @@
-import os
-import sys
+"""HTTP API and single-command dashboard entry point."""
+
+import argparse
 import io
-import pandas as pd
+import logging
+import os
+from datetime import date
+from pathlib import Path
+import sys
+from threading import Lock
+from typing import Annotated, Literal
 
-# Ensure workspace root is in sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+import pandas as pd
+from pydantic import BaseModel, Field, ValidationError, field_validator
+
+load_dotenv(ROOT / ".env", override=False)
+os.environ.setdefault("DEMO_MOCK_MODE", "true")
 
 from backend.agent.pipeline import SamrukWindAgentPipeline
 from backend.agent.weather_tool import TURBINES
 
+logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Samruk WindAgent AI",
-    description="Agentic AI for Wind Power Plant Generation Forecasting (Samruk-Kazyna - Shelek Wind Farm)",
+    description="Agentic AI for Wind Power Plant Generation Forecasting (Samruk-Kazyna - Shelek WF)",
     version="2.0.0"
 )
+
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request: Request, exc: ValidationError):
+    from fastapi.encoders import jsonable_encoder
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
+
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
-# Global pipeline instance (cached)
 pipeline = None
+_pipeline_lock = Lock()
+TurbineId = Literal["turbine_1", "turbine_2", "farm", "all", "both", "cluster"]
+
 
 def get_pipeline():
+    """Train at most once, including concurrent requests arriving at startup."""
     global pipeline
     if pipeline is None:
-        pipeline = SamrukWindAgentPipeline()
+        with _pipeline_lock:
+            if pipeline is None:
+                pipeline = SamrukWindAgentPipeline()
     return pipeline
 
+
 class ForecastRequest(BaseModel):
-    target_date: str = "2026-02-14"
-    horizon_hours: int = 48
-    turbine_id: str = "turbine_1"
+    target_date: str = Field("2026-02-14", pattern=r"^\d{4}-\d{2}-\d{2}$", description="Start date YYYY-MM-DD")
+    horizon_hours: int = Field(48, ge=1, le=168, description="Hourly steps (24 or 48 for the challenge)")
+    turbine_id: TurbineId = Field("turbine_1", description="turbine_1, turbine_2, or farm")
+    refresh_weather: bool = Field(False, description="Refresh weather and re-evaluate this forecast")
+
+    @field_validator("target_date")
+    @classmethod
+    def validate_date(cls, value):
+        date.fromisoformat(value)
+        return value
+
+    @field_validator("turbine_id")
+    @classmethod
+    def normalize_turbine(cls, value):
+        return "farm" if value in ("all", "both", "cluster") else value
+
+
+def _forecast(req: ForecastRequest):
+    try:
+        return get_pipeline().run_forecast_cycle(**req.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Forecast failed")
+        raise HTTPException(status_code=500, detail="Forecast could not be generated. Check the server log and data source.") from exc
+
+
+def _csv_response(frame: pd.DataFrame, filename: str):
+    stream = io.StringIO()
+    frame.to_csv(stream, index=False)
+    return StreamingResponse(
+        iter([stream.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/health")
+def health():
+    return {
+        "status": "ok",
+        "version": app.version,
+        "model_initialized": pipeline is not None,
+        "demo_mock_mode": os.environ.get("DEMO_MOCK_MODE", "true").lower() in ("true", "1", "yes"),
+    }
+
 
 @app.get("/api/turbines")
 def get_turbines():
     return {"status": "SUCCESS", "turbines": TURBINES}
 
+
 @app.post("/api/forecast")
 def generate_forecast_post(req: ForecastRequest):
-    try:
-        p = get_pipeline()
-        result = p.run_forecast_cycle(
-            target_date=req.target_date,
-            horizon_hours=req.horizon_hours,
-            turbine_id=req.turbine_id
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return _forecast(req)
+
 
 @app.get("/api/forecast")
-def generate_forecast_get(
-    target_date: str = Query("2026-02-14", description="Start date YYYY-MM-DD"),
-    horizon_hours: int = Query(48, ge=1, le=168, description="Horizon in hours (24 or 48)"),
-    turbine_id: str = Query("turbine_1", description="turbine_1, turbine_2, or farm")
-):
-    try:
-        p = get_pipeline()
-        result = p.run_forecast_cycle(
-            target_date=target_date,
-            horizon_hours=horizon_hours,
-            turbine_id=turbine_id
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def generate_forecast_get(req: Annotated[ForecastRequest, Depends()]):
+    return _forecast(req)
+
 
 @app.get("/api/simulation/february")
-def get_february_simulation(turbine_id: str = Query("farm", description="turbine_1, turbine_2, or farm")):
+def get_february_simulation(turbine_id: TurbineId = Query("farm")):
+    canonical_id = "farm" if turbine_id in ("all", "both", "cluster") else turbine_id
     try:
-        p = get_pipeline()
-        return p.run_full_february_simulation(turbine_id=turbine_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return get_pipeline().run_full_february_simulation(turbine_id=canonical_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("February simulation failed")
+        raise HTTPException(status_code=500, detail="February simulation could not be generated.") from exc
+
 
 @app.get("/api/export/csv")
-def export_forecast_csv(
-    target_date: str = Query("2026-02-14", description="Start date YYYY-MM-DD"),
-    horizon_hours: int = Query(48, ge=1, le=168, description="Horizon in hours (24 or 48)"),
-    turbine_id: str = Query("turbine_1", description="turbine_1, turbine_2, or farm")
-):
-    """
-    Downloads forecast data as CSV formatted for Samruk-Kazyna evaluation.
-    Correctly accounts for selected turbine ID and rated capacity.
-    """
-    p = get_pipeline()
-    res = p.run_forecast_cycle(target_date=target_date, horizon_hours=horizon_hours, turbine_id=turbine_id)
-    df = pd.DataFrame(res["timeline"])
-    
-    stream = io.StringIO()
-    df.to_csv(stream, index=False)
-    
-    response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
-    response.headers["Content-Disposition"] = f"attachment; filename=wind_forecast_{turbine_id}_{target_date}.csv"
-    return response
+def export_forecast_csv(req: Annotated[ForecastRequest, Depends()]):
+    result = _forecast(req)
+    frame = pd.DataFrame(result["timeline"])
+    benchmark = result.get("benchmark", {})
+    frame["weather_source"] = benchmark.get("data_provenance", "UNKNOWN")
+    frame["training_data_source"] = benchmark.get("training_data_source", "UNKNOWN")
+    frame["evaluation_status"] = benchmark.get("evaluation_status", "UNVERIFIED_NO_ACTUALS")
+    metadata = result.get("metadata", {})
+    for field in ("turbine_id", "target_date", "timezone", "scenario_issue_time", "generated_at", "forecast_issue_time_verified"):
+        frame[field] = metadata.get(field)
+    return _csv_response(frame, f"wind_forecast_{req.turbine_id}_{req.target_date}.csv")
+
 
 @app.get("/api/export/submission")
 def export_submission_csv():
-    """
-    Downloads full 28-day (1,344 hours) test forecast CSV for the entire February 2026.
-    """
-    csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "submission_forecast_february_2026.csv")
-    if not os.path.exists(csv_path):
-        from scripts.run_february_test import run_test
-        run_test()
-    with open(csv_path, "r", encoding="utf-8") as f:
-        content = f.read()
-    response = StreamingResponse(io.StringIO(content), media_type="text/csv")
-    response.headers["Content-Disposition"] = "attachment; filename=submission_forecast_february_2026.csv"
-    return response
+    """Return 28 daily 24-hour windows for each turbine, generated without file writes."""
+    from scripts.run_february_test import build_submission
+
+    try:
+        frame, _ = build_submission(get_pipeline())
+        return _csv_response(frame, "submission_forecast_february_2026.csv")
+    except Exception as exc:
+        logger.exception("Submission export failed")
+        raise HTTPException(status_code=500, detail="February submission could not be generated.") from exc
 
 
 @app.get("/", response_class=HTMLResponse)
 def serve_dashboard():
-    """
-    Single-command modern interactive dashboard.
-    Demonstrates the live Agentic AI loop, dispatcher insights, and generation curves.
-    """
-    html_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
-    if os.path.exists(html_path):
-        with open(html_path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Samruk WindAgent AI running. Dashboard loading...</h1>"
+    return (ROOT / "backend" / "static" / "index.html").read_text(encoding="utf-8")
+
+
+def _port(value):
+    try:
+        port = int(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError("port must be an integer from 1 to 65535") from exc
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be an integer from 1 to 65535")
+    return port
+
+
+def main(argv=None):
+    import uvicorn
+
+    parser = argparse.ArgumentParser(description="Start the WindAgent API and dashboard")
+    parser.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=_port, default=os.environ.get("PORT", "8000"))
+    args = parser.parse_args(argv)
+    uvicorn.run(app, host=args.host, port=args.port)
+
 
 if __name__ == "__main__":
-    import uvicorn
-    host = os.environ.get("HOST", "0.0.0.0")
-    port = int(os.environ.get("PORT", "8000"))
-    # Initialize model upon startup
-    get_pipeline()
-    uvicorn.run(app, host=host, port=port)
+    main()

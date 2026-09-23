@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import pandas as pd
 
@@ -51,8 +50,8 @@ class DispatcherAgentReasoner:
                 "title_kz": "Дауыл салдарынан апаттық тоқтау",
                 "detail_ru": f"Скорость ветра {wind_100[h]:.1f} м/с превышает порог безопасности 25 м/с. Прогноз выработки обнулен.",
                 "detail_kz": f"Жел жылдамдығы {wind_100[h]:.1f} м/с қауіпсіздік шегінен (25 м/с) асты. Өндіріс болжамы нөлге теңестірілді.",
-                "action_ru": "Подать нулевую диспетчерскую заявку в KEGOC на данный час для предотвращения штрафа за небаланс.",
-                "action_kz": "Теңгерімсіздік айыппұлын болдырмау үшін KEGOC-қа осы сағатқа нөлдік өтінім беру."
+                "action_ru": "Проверить ограничения турбины и согласовать нулевой прогноз с диспетчером; заявка автоматически не отправляется.",
+                "action_kz": "Турбина шектеулерін тексеріп, нөлдік болжамды диспетчермен келісу; өтінім автоматты түрде жіберілмейді."
             })
 
         for h in icing_indices:
@@ -66,8 +65,8 @@ class DispatcherAgentReasoner:
                 "title_kz": "Аэродинамикалық мұздану қаупі",
                 "detail_ru": f"Температура {temps[h]:.1f}°C. Возможно снижение аэродинамического КПД лопастей.",
                 "detail_kz": f"Температура {temps[h]:.1f}°C. Қалақтардың аэродинамикалық ПӘК төмендеуі мүмкін.",
-                "action_ru": "Активировать противообледенительную систему (de-icing) и скорректировать заявку на -5-10%.",
-                "action_kz": "Мұзға қарсы жүйені іске қосу және өтінімді 5-10%-ға түзету."
+                "action_ru": "Проверить влажность, датчики обледенения и регламент турбины. Температуры недостаточно для подтверждения обледенения.",
+                "action_kz": "Ылғалдылықты, мұздану датчиктерін және турбина нұсқаулығын тексеру. Температура мұздануды растауға жеткіліксіз."
             })
 
         for h in ramp_indices:
@@ -86,10 +85,9 @@ class DispatcherAgentReasoner:
                 "action_kz": "Қазақстанның БЭЖ Ұлттық диспетчерлік орталығына жаңартылған тәуліктік кестені алдын ала жіберу."
             })
 
-        # Economic impact: saved KEGOC balancing penalties (tariff ~14,500 KZT per MWh imbalance)
-        # Difference in error between naive baseline and AI agent model (~15-20% improved precision)
-        imbalance_tariff_kzt = 14500
-        saved_penalties_kzt = int(total_mwh * 0.18 * imbalance_tariff_kzt)
+        # No actual generation, settled imbalance prices or counterfactual schedule is supplied.
+        imbalance_tariff_kzt = None
+        saved_penalties_kzt = None
 
         # Status determination
         if len(storm_indices) > 0:
@@ -101,7 +99,7 @@ class DispatcherAgentReasoner:
 
         # Generate Dispatcher Narrative
         summary_ru, summary_kz = cls._generate_narratives(
-            target_date, total_mwh, capacity_factor, capacity_mw, storm_indices, icing_indices, ramp_indices, saved_penalties_kzt
+            target_date, total_mwh, capacity_factor, capacity_mw, storm_indices, icing_indices, ramp_indices, total_hours
         )
 
         return {
@@ -113,6 +111,11 @@ class DispatcherAgentReasoner:
             "capacity_factor_pct": round(capacity_factor, 1),
             "estimated_penalty_saved_kzt": saved_penalties_kzt,
             "imbalance_tariff_kzt_mwh": imbalance_tariff_kzt,
+            "economic_assessment": {
+                "status": "NOT_EVALUATED",
+                "reason": "Actual generation, baseline schedule and verified settlement prices required",
+            },
+            "reasoner_type": "DETERMINISTIC_RULES",
             "alerts": {
                 "storm_cutout_detected": len(storm_indices) > 0,
                 "storm_hours": storm_indices,
@@ -127,11 +130,11 @@ class DispatcherAgentReasoner:
         }
 
     @classmethod
-    def _generate_narratives(cls, date: str, total_mwh: float, cf: float, cap_mw: float, storm_h: list, icing_h: list, ramp_h: list, saved_kzt: int) -> tuple:
+    def _generate_narratives(cls, date: str, total_mwh: float, cf: float, cap_mw: float, storm_h: list, icing_h: list, ramp_h: list, total_hours: int) -> tuple:
         ru_lines = [
-            f"⚡ **Суточный диспетчерский отчёт ВЭС Шелек ({cap_mw} МВт) на {date}:**",
+            f"⚡ **Диспетчерский отчёт ВЭС Шелек ({cap_mw} МВт) с {date}, горизонт {total_hours} ч:**",
             f"• Прогнозируемая выработка: **{total_mwh:.2f} МВт·ч** (КУИМ: **{cf:.1f}%**).",
-            f"• Предотвращенные штрафы KEGOC (балансирующий рынок): **~{saved_kzt:,} тенге**."
+            "• Экономический эффект не оценён: нужны фактическая выработка, базовая заявка и цены расчёта небалансов."
         ]
         if storm_h:
             ru_lines.append(f"⚠️ **ШТОРМОВОЙ ОСТАНОВ (v >= 25 м/с):** В часы {storm_h}. Генерация безопасно обнулена агентом.")
@@ -140,12 +143,12 @@ class DispatcherAgentReasoner:
         if ramp_h:
             ru_lines.append(f"📈 **Высокая градиентность ветра:** В часы {ramp_h}. Рекомендовано предупреждение НДЦ СО ЕЭС.")
         if not storm_h and not icing_h and not ramp_h:
-            ru_lines.append("✅ Метеорежим оптимален, генерация стабильна, рисков аварийного отключения нет.")
+            ru_lines.append("Пороговые погодные риски не обнаружены. Это не подтверждает отсутствие эксплуатационных рисков.")
 
         kz_lines = [
-            f"⚡ **Шелек ЖЭС ({cap_mw} МВт) бойынша {date} күніне арналған диспетчерлік есеп:**",
+            f"⚡ **Шелек ЖЭС ({cap_mw} МВт): {date} күнінен бастап {total_hours} сағатқа диспетчерлік есеп:**",
             f"• Болжамды электр өндірісі: **{total_mwh:.2f} МВт·сағ** (Пайдалану коэффициенті: **{cf:.1f}%**).",
-            f"• KEGOC теңгерімсіздік айыппұлдарын азайту үнемі: **~{saved_kzt:,} теңге**."
+            "• Экономикалық әсер бағаланбаған: нақты өндіріс, базалық өтінім және теңгерімсіздік бағалары қажет."
         ]
         if storm_h:
             kz_lines.append(f"⚠️ **ДАУЫЛ ТОҚТАУЫ (v >= 25 м/с):** Сағаттар: {storm_h}. Агент болжамды нөлге теңестірді.")
@@ -154,6 +157,6 @@ class DispatcherAgentReasoner:
         if ramp_h:
             kz_lines.append(f"📈 **Қуаттың күрт ауытқуы:** Сағаттар: {ramp_h}. Ұлттық диспетчерлік орталыққа ескерту ұсынылады.")
         if not storm_h and not icing_h and not ramp_h:
-            kz_lines.append("✅ Метеожағдай қолайлы, өндіріс тұрақты, апаттық қауіптер жоқ.")
+            kz_lines.append("Шекті ауа райы қауіптері анықталмады. Бұл пайдалану қауіптерінің жоқтығын растамайды.")
 
         return "\n".join(ru_lines), "\n".join(kz_lines)

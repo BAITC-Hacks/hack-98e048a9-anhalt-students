@@ -1,90 +1,143 @@
+"""Generate February forecast windows and a provenance-aware summary.
+
+Default: 28 origins x 24 hours x 2 turbines = 1,344 rows.
+A 48-hour run has 2,688 rows; only lead hours 1..24 enter monthly totals.
+This is a forecast replay, not an accuracy backtest without measured generation.
+"""
+
+import argparse
+import json
 import os
+from pathlib import Path
 import sys
+
 import pandas as pd
-import numpy as np
+from dotenv import load_dotenv
 
-# Force UTF-8 on Windows consoles
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+DEFAULT_OUTPUT = ROOT / "data" / "submission_forecast_february_2026.csv"
 
-# Ensure root directory is on sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.agent.pipeline import SamrukWindAgentPipeline
+def build_submission(pipeline=None, horizon_hours: int = 24):
+    """Return a CSV frame and summary without writing any output files."""
+    if horizon_hours not in (24, 48):
+        raise ValueError("February submission horizon must be 24 or 48 hours")
+    if pipeline is None:
+        from backend.agent.pipeline import SamrukWindAgentPipeline
 
-def run_test():
-    print("=" * 70)
-    print("[TEST RUN] HackAlem AI: Запуск полного тестового прогона за Февраль 2026 г.")
-    print("Объект: ВЭС Шелек (Турбина 1 [2.5 МВт], Турбина 2 [2.5 МВт], ВЭС [5.0 МВт])")
-    print("=" * 70)
+        pipeline = SamrukWindAgentPipeline()
 
-    pipe = SamrukWindAgentPipeline()
-
-    all_rows = []
+    rows = []
     daily_summaries = []
-
-    # Iterate over all 28 days of February 2026
     for day in range(1, 29):
-        date_str = f"2026-02-{day:02d}"
-        
-        # Test 1: Single Turbine 1 (24h)
-        res_t1 = pipe.run_forecast_cycle(target_date=date_str, horizon_hours=24, turbine_id="turbine_1")
-        # Test 2: Single Turbine 2 (24h)
-        res_t2 = pipe.run_forecast_cycle(target_date=date_str, horizon_hours=24, turbine_id="turbine_2")
-        # Test 3: Total Farm (48h horizon)
-        res_farm_48 = pipe.run_forecast_cycle(target_date=date_str, horizon_hours=48, turbine_id="farm")
-
-        audit = res_farm_48["audit"]
-        bench = res_farm_48["benchmark"]
-
-        daily_summaries.append({
-            "date": date_str,
-            "t1_gen_24h_mwh": res_t1["audit"]["total_generation_mwh"],
-            "t2_gen_24h_mwh": res_t2["audit"]["total_generation_mwh"],
-            "farm_gen_24h_mwh": round(res_t1["audit"]["total_generation_mwh"] + res_t2["audit"]["total_generation_mwh"], 2),
-            "farm_gen_48h_mwh": audit["total_generation_mwh"],
-            "capacity_factor_pct": audit["capacity_factor_pct"],
-            "saved_kegoc_penalties_kzt": audit["estimated_penalty_saved_kzt"],
-            "skill_score": bench["skill_score_index"],
-            "agent_status": audit["agent_status"],
-            "events_count": len(audit.get("events", []))
-        })
-
-        for row in res_farm_48["timeline"]:
-            all_rows.append({
-                "forecast_origin_date": date_str,
-                "lead_hour": row["hour_index"] + 1,
-                "timestamp": row["timestamp"],
-                "turbine_id": "farm",
-                "predicted_mw": row["predicted_mwh"],
-                "physics_baseline_mw": row["physics_mwh"],
-                "persistence_baseline_mw": row["persistence_mwh"],
-                "wind_speed_100m_ms": row["wind_speed_100m"],
-                "temperature_2m_c": row["temperature_2m"],
-                "air_density_kg_m3": row["air_density_kg_m3"]
+        origin = f"2026-02-{day:02d}"
+        for turbine_id in ("turbine_1", "turbine_2"):
+            result = pipeline.run_forecast_cycle(
+                target_date=origin, horizon_hours=horizon_hours, turbine_id=turbine_id
+            )
+            timeline = result["timeline"]
+            if len(timeline) != horizon_hours:
+                raise ValueError(f"Incomplete forecast for {turbine_id} on {origin}")
+            metadata = result.get("metadata", {})
+            benchmark = result.get("benchmark", {})
+            for index, row in enumerate(timeline):
+                rows.append({
+                    "forecast_origin_date": origin,
+                    "forecast_target_date": origin,
+                    "scenario_issue_time": metadata.get("scenario_issue_time"),
+                    "generated_at": metadata.get("generated_at"),
+                    "lead_hour": index + 1,
+                    "timestamp": row["timestamp"],
+                    "timezone": metadata.get("timezone", "Asia/Almaty"),
+                    "turbine_id": turbine_id,
+                    "predicted_mw": row.get("predicted_mw", row["predicted_mwh"]),
+                    "predicted_mwh": row["predicted_mwh"],
+                    "interval_hours": 1,
+                    "physics_baseline_mw": row.get("physics_mw", row["physics_mwh"]),
+                    "persistence_baseline_mw": row.get("persistence_mw", row["persistence_mwh"]),
+                    "wind_speed_100m_ms": row["wind_speed_100m"],
+                    "temperature_2m_c": row["temperature_2m"],
+                    "air_density_kg_m3": row["air_density_kg_m3"],
+                    "weather_source": benchmark.get("data_provenance", "UNKNOWN"),
+                    "training_data_source": benchmark.get("training_data_source", metadata.get("training_data_source", "UNKNOWN")),
+                    "evaluation_status": benchmark.get("evaluation_status", "UNVERIFIED_NO_ACTUALS"),
+                    "forecast_issue_time_verified": metadata.get("forecast_issue_time_verified", False),
+                    "included_in_monthly_total": index < 24,
+                })
+            daily_summaries.append({
+                "date": origin,
+                "turbine_id": turbine_id,
+                "forecast_generation_first_24h_mwh": round(sum(row["predicted_mwh"] for row in timeline[:24]), 3),
+                "agent_status": result["audit"]["agent_status"],
             })
 
-    # Save full hourly predictions to CSV
-    out_csv = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "submission_forecast_february_2026.csv")
-    df_pred = pd.DataFrame(all_rows)
-    df_pred.to_csv(out_csv, index=False)
+    frame = pd.DataFrame(rows)
+    accounting_rows = frame.loc[frame["included_in_monthly_total"]]
+    if accounting_rows.duplicated(["turbine_id", "timestamp"]).any():
+        raise ValueError("Duplicate turbine hours in monthly accounting")
+    total_mwh = float(accounting_rows["predicted_mwh"].sum())
+    summary = {
+        "month": "2026-02",
+        "forecast_origins": 28,
+        "turbines": 2,
+        "horizon_hours": horizon_hours,
+        "rows": len(frame),
+        "monthly_accounting_turbine_hours": len(accounting_rows),
+        "monthly_accounting_calendar_hours": 28 * 24,
+        "monthly_forecast_generation_mwh": round(total_mwh, 3),
+        "forecast_capacity_factor_pct": round(total_mwh / (28 * 24 * 5.0) * 100, 3),
+        "weather_sources": sorted(frame["weather_source"].unique().tolist()),
+        "training_data_sources": sorted(frame["training_data_source"].unique().tolist()),
+        "evaluation_status": "UNVERIFIED_NO_ACTUALS",
+        "skill_score_vs_observations": None,
+        "verified_kegoc_savings_kzt": None,
+        "forecast_issue_time_verified": bool(frame["forecast_issue_time_verified"].all()),
+        "forecast_origin_date_definition": "Legacy column name: target window start date; scenario_issue_time is the nominal issue time.",
+        "accounting_method": "Sum lead hours 1..24 for both turbines at each February origin; exclude overlapping later leads.",
+        "limitations": [
+            "Predicted generation, not measured generation or verified forecast accuracy.",
+            "Archived weather does not establish a forecast available at the historical issue time.",
+            "No SCADA actuals or verified imbalance prices: accuracy and financial savings are not evaluated.",
+        ],
+        "daily_breakdown": daily_summaries,
+    }
+    return frame, summary
 
-    df_sum = pd.DataFrame(daily_summaries)
-    
-    print("\n[SUCCESS] Тестовый прогон 28 дней февраля 2026 года успешно завершен!")
-    print(f"[OUTPUT] Итоговый файл прогнозов: {out_csv} (Строк: {len(df_pred):,})")
-    print("\n--- СВОДНЫЕ РЕЗУЛЬТАТЫ ЗА ФЕВРАЛЬ 2026 ---")
-    print(f"Всего суток: {len(df_sum)}")
-    print(f"Суммарная выработка ВЭС (48ч сумма): {df_sum['farm_gen_48h_mwh'].sum():,.2f} МВт·ч")
-    print(f"Средний суточный КУИМ: {df_sum['capacity_factor_pct'].mean():.1f}%")
-    print(f"Предотвращенные штрафы KEGOC: {df_sum['saved_kegoc_penalties_kzt'].sum():,} ₸")
-    print(f"Средний индекс Skill Score (vs Persistence): {df_sum['skill_score'].mean():.3f}")
-    
-    critical_days = df_sum[df_sum["agent_status"] == "CRITICAL_SHUTDOWN"]
-    print(f"Дней со штормовым остановом: {len(critical_days)}")
-    advisory_days = df_sum[df_sum["agent_status"] == "ADVISORY_ATTENTION"]
-    print(f"Дней с обледенением/градиентами ветра: {len(advisory_days)}")
-    print("=" * 70)
+
+def run_test(output_path=DEFAULT_OUTPUT, horizon_hours: int = 24, pipeline=None):
+    """Write forecast rows and a companion summary; return the summary for callers."""
+    load_dotenv(ROOT / ".env", override=False)
+    os.environ.setdefault("DEMO_MOCK_MODE", "true")
+    frame, summary = build_submission(pipeline, horizon_hours)
+    output_path = Path(output_path).resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    frame.to_csv(output_path, index=False)
+    summary_path = output_path.with_suffix(".summary.json")
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Forecast replay completed: {len(frame):,} rows; {horizon_hours}h windows for two turbines.")
+    print(f"CSV: {output_path}")
+    print(f"Summary: {summary_path}")
+    print(f"February forecast energy (non-overlapping): {summary['monthly_forecast_generation_mwh']:,.3f} MWh")
+    print(f"Forecast capacity factor: {summary['forecast_capacity_factor_pct']:.3f}%")
+    print(f"Weather sources: {', '.join(summary['weather_sources'])}")
+    print(f"Training sources: {', '.join(summary['training_data_sources'])}")
+    print("Accuracy Skill Score and KEGOC savings: NOT EVALUATED (no observed generation / settlement data).")
+    return summary
+
+
+def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="CSV output path (existing file will be replaced)")
+    parser.add_argument("--horizon-hours", type=int, choices=(24, 48), default=24)
+    parser.add_argument("--mock", action="store_true", help="Force deterministic offline weather")
+    args = parser.parse_args()
+    if args.mock:
+        os.environ["DEMO_MOCK_MODE"] = "true"
+    run_test(args.output, args.horizon_hours)
+
 
 if __name__ == "__main__":
-    run_test()
+    main()

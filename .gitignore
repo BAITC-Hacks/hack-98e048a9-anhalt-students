@@ -65,3 +65,7 @@ desktop.ini
 *.sqlite3
 *.db
 pocketbase/pb_data/
+
+# Generated runtime caches; old submitted artifacts are retained.
+.pytest_cache/
+data/weather_cache_v3/

@@ -1,0 +1,218 @@
+[
+  {
+    "time": "2026-02-26 00:00:00",
+    "temperature_2m": -0.1,
+    "wind_speed_10m": 4.1,
+    "wind_speed_100m": 7.85,
+    "wind_direction_100m": 68,
+    "surface_pressure": 950.0,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 01:00:00",
+    "temperature_2m": -0.1,
+    "wind_speed_10m": 4.08,
+    "wind_speed_100m": 7.65,
+    "wind_direction_100m": 73,
+    "surface_pressure": 949.1,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 02:00:00",
+    "temperature_2m": 0.2,
+    "wind_speed_10m": 4.35,
+    "wind_speed_100m": 7.99,
+    "wind_direction_100m": 72,
+    "surface_pressure": 948.4,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 03:00:00",
+    "temperature_2m": 0.7,
+    "wind_speed_10m": 4.02,
+    "wind_speed_100m": 7.2,
+    "wind_direction_100m": 73,
+    "surface_pressure": 947.5,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 04:00:00",
+    "temperature_2m": 0.7,
+    "wind_speed_10m": 4.34,
+    "wind_speed_100m": 7.65,
+    "wind_direction_100m": 71,
+    "surface_pressure": 946.4,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 05:00:00",
+    "temperature_2m": 0.7,
+    "wind_speed_10m": 4.34,
+    "wind_speed_100m": 7.54,
+    "wind_direction_100m": 71,
+    "surface_pressure": 946.1,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 06:00:00",
+    "temperature_2m": 0.4,
+    "wind_speed_10m": 4.49,
+    "wind_speed_100m": 7.64,
+    "wind_direction_100m": 67,
+    "surface_pressure": 946.0,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 07:00:00",
+    "temperature_2m": 0.4,
+    "wind_speed_10m": 3.64,
+    "wind_speed_100m": 6.54,
+    "wind_direction_100m": 74,
+    "surface_pressure": 945.3,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 08:00:00",
+    "temperature_2m": 1.6,
+    "wind_speed_10m": 3.66,
+    "wind_speed_100m": 6.6,
+    "wind_direction_100m": 66,
+    "surface_pressure": 945.2,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 09:00:00",
+    "temperature_2m": 3.6,
+    "wind_speed_10m": 4.19,
+    "wind_speed_100m": 5.65,
+    "wind_direction_100m": 54,
+    "surface_pressure": 945.0,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 10:00:00",
+    "temperature_2m": 4.5,
+    "wind_speed_10m": 2.32,
+    "wind_speed_100m": 3.06,
+    "wind_direction_100m": 26,
+    "surface_pressure": 946.4,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 11:00:00",
+    "temperature_2m": 5.9,
+    "wind_speed_10m": 1.7,
+    "wind_speed_100m": 2.05,
+    "wind_direction_100m": 267,
+    "surface_pressure": 947.3,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 12:00:00",
+    "temperature_2m": 4.7,
+    "wind_speed_10m": 6.7,
+    "wind_speed_100m": 8.95,
+    "wind_direction_100m": 269,
+    "surface_pressure": 948.8,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 13:00:00",
+    "temperature_2m": 2.1,
+    "wind_speed_10m": 4.73,
+    "wind_speed_100m": 5.98,
+    "wind_direction_100m": 264,
+    "surface_pressure": 949.5,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 14:00:00",
+    "temperature_2m": -0.3,
+    "wind_speed_10m": 3.84,
+    "wind_speed_100m": 5.41,
+    "wind_direction_100m": 251,
+    "surface_pressure": 950.2,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 15:00:00",
+    "temperature_2m": -0.6,
+    "wind_speed_10m": 3.53,
+    "wind_speed_100m": 5.35,
+    "wind_direction_100m": 249,
+    "surface_pressure": 950.1,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 16:00:00",
+    "temperature_2m": -0.1,
+    "wind_speed_10m": 4.96,
+    "wind_speed_100m": 8.14,
+    "wind_direction_100m": 262,
+    "surface_pressure": 950.3,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 17:00:00",
+    "temperature_2m": -0.2,
+    "wind_speed_10m": 5.64,
+    "wind_speed_100m": 10.17,
+    "wind_direction_100m": 267,
+    "surface_pressure": 951.3,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 18:00:00",
+    "temperature_2m": -0.6,
+    "wind_speed_10m": 5.52,
+    "wind_speed_100m": 9.66,
+    "wind_direction_100m": 268,
+    "surface_pressure": 951.9,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 19:00:00",
+    "temperature_2m": -0.4,
+    "wind_speed_10m": 4.47,
+    "wind_speed_100m": 7.72,
+    "wind_direction_100m": 256,
+    "surface_pressure": 952.5,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 20:00:00",
+    "temperature_2m": 0.2,
+    "wind_speed_10m": 4.7,
+    "wind_speed_100m": 8.29,
+    "wind_direction_100m": 250,
+    "surface_pressure": 952.5,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 21:00:00",
+    "temperature_2m": 0.8,
+    "wind_speed_10m": 4.8,
+    "wind_speed_100m": 8.47,
+    "wind_direction_100m": 263,
+    "surface_pressure": 952.9,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 22:00:00",
+    "temperature_2m": 0.8,
+    "wind_speed_10m": 4.84,
+    "wind_speed_100m": 8.5,
+    "wind_direction_100m": 261,
+    "surface_pressure": 952.9,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  },
+  {
+    "time": "2026-02-26 23:00:00",
+    "temperature_2m": 0.2,
+    "wind_speed_10m": 4.51,
+    "wind_speed_100m": 7.65,
+    "wind_direction_100m": 271,
+    "surface_pressure": 953.2,
+    "data_source": "OPEN_METEO_HISTORICAL_FORECAST"
+  }
+]

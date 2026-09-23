@@ -10,6 +10,11 @@ from backend.main import app
 
 client = TestClient(app)
 
+
+@pytest.fixture(autouse=True)
+def offline_test_weather(monkeypatch):
+    monkeypatch.setenv("DEMO_MOCK_MODE", "true")
+
 def test_weather_tool_fetch_and_units():
     tool = WeatherAgentTool()
     coords = TURBINES["turbine_1"]

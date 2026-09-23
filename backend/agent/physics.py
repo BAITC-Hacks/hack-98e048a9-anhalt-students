@@ -3,8 +3,9 @@ import pandas as pd
 
 class WindTurbinePhysics:
     """
-    Physical Aerodynamic and Meteorological models for Industrial Wind Turbines (Shelek WF).
-    Incorporates IEC 61400-12 power curves, Hellman wind shear, and air density adjustments.
+    Generic turbine approximation with wind shear and dry-air density adjustment.
+
+    The cubic curve is a demo prior, not a manufacturer curve or IEC certification.
     """
     # Standard industrial turbine specs (e.g. Goldwind / Vestas 2.5 - 3.3 MW)
     V_CUT_IN = 3.0      # m/s
@@ -20,14 +21,18 @@ class WindTurbinePhysics:
         Calculates real-time air density rho = P / (R * T).
         Winter cold in Kazakhstan (-15C) increases air density by >10%, drastically boosting power output.
         """
-        t_kelvin = np.maximum(temperature_c + 273.15, 220.0)
+        t_kelvin = np.asarray(temperature_c, dtype=float) + 273.15
+        if not np.all(np.isfinite(t_kelvin)) or np.any(t_kelvin <= 0):
+            raise ValueError("Temperature must be finite and above absolute zero")
         if pressure_hpa is None:
             pressure_pa = 101325.0 # default sea-level/nominal
         else:
-            pressure_pa = pressure_hpa * 100.0
+            pressure_pa = np.asarray(pressure_hpa, dtype=float) * 100.0
+        if not np.all(np.isfinite(pressure_pa)) or np.any(pressure_pa <= 0):
+            raise ValueError("Pressure must be finite and positive (hPa)")
         
         rho = pressure_pa / (cls.R_SPECIFIC * t_kelvin)
-        return np.clip(rho, 1.0, 1.45)
+        return rho
 
     @classmethod
     def theoretical_power_curve(cls, wind_speed_hub: np.ndarray, air_density: np.ndarray = None) -> np.ndarray:
@@ -35,11 +40,15 @@ class WindTurbinePhysics:
         Calculates normalized active power (0.0 to 1.0) according to aerodynamic power curve.
         Accounts for density scaling and hard cut-in / cut-out thresholds.
         """
-        wind = np.maximum(wind_speed_hub, 0.0)
+        wind = np.maximum(np.asarray(wind_speed_hub, dtype=float), 0.0)
+        if not np.all(np.isfinite(wind)):
+            raise ValueError("Wind speed must be finite")
         if air_density is None:
             density_ratio = 1.0
         else:
-            density_ratio = air_density / cls.RHO_STANDARD
+            density_ratio = np.broadcast_to(np.asarray(air_density, dtype=float), wind.shape) / cls.RHO_STANDARD
+            if not np.all(np.isfinite(density_ratio)) or np.any(density_ratio <= 0):
+                raise ValueError("Air density must be finite and positive")
 
         # Vectorized power calculation
         p_norm = np.zeros_like(wind, dtype=float)
@@ -71,12 +80,14 @@ class WindTurbinePhysics:
 
         # Wind speed at hub height (if missing, use Hellman shear law alpha=0.20)
         if "wind_speed_100m" in res.columns:
-            v_hub = res["wind_speed_100m"].values
+            v_hub = res["wind_speed_100m"].to_numpy(dtype=float)
         elif "wind_speed_10m" in res.columns:
             v_hub = res["wind_speed_10m"].values * ((cls.HUB_HEIGHT / 10.0) ** 0.20)
             res["wind_speed_100m"] = v_hub
         else:
-            v_hub = np.full(len(res), 6.0)
+            raise ValueError("Weather must include wind_speed_100m or wind_speed_10m")
+        if "wind_speed_10m" not in res.columns:
+            res["wind_speed_10m"] = v_hub / ((cls.HUB_HEIGHT / 10.0) ** 0.20)
 
         temp = res["temperature_2m"].values if "temperature_2m" in res.columns else np.zeros(len(res))
         press = res["surface_pressure"].values if "surface_pressure" in res.columns else np.full(len(res), 1013.25)
@@ -98,5 +109,8 @@ class WindTurbinePhysics:
             res["dayofweek"] = res["time"].dt.dayofweek
             res["sin_hour"] = np.sin(2 * np.pi * res["hour"] / 24.0)
             res["cos_hour"] = np.cos(2 * np.pi * res["hour"] / 24.0)
+        else:
+            res["sin_hour"] = 0.0
+            res["cos_hour"] = 1.0
 
         return res

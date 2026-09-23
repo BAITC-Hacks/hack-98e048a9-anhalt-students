@@ -1,152 +1,219 @@
-import os
-import pandas as pd
+"""Bounded, auditable orchestration. Accuracy requires observed generation."""
+from datetime import datetime, timedelta, timezone
+import hashlib
+from threading import RLock
+from uuid import uuid4
 import numpy as np
-from datetime import datetime, timedelta
+import pandas as pd
 from .weather_tool import WeatherAgentTool, TURBINES
 from .physics import WindTurbinePhysics
 from .model import WindForecastingModel
 from .reasoner import DispatcherAgentReasoner
 from .data_loader import get_or_create_historical_data
 
+
 class SamrukWindAgentPipeline:
-    """
-    Autonomous Agentic AI Pipeline for Samruk-Kazyna Wind Farm Generation Forecasting.
-    Orchestrates: Weather Retrieval -> Physics Enrichment -> Multi-Model Inference (LightGBM vs Physics vs Persistence) -> Dispatcher Audit.
-    """
     def __init__(self):
         self.weather_tool = WeatherAgentTool()
         self.model = WindForecastingModel()
-        self._ensure_trained()
+        self._lock = RLock()
+        self._runs = {}
+        self.history = get_or_create_historical_data()
+        self.training_metadata = self.model.train(self.history, cutoff="2026-02-01")
+        self._training_cutoff = pd.Timestamp("2026-02-01")
 
-    def _ensure_trained(self):
-        hist_df = get_or_create_historical_data()
-        print("[Agent Pipeline] Training / Verifying LightGBM forecasting model...")
-        metrics = self.model.train(hist_df, target_col="normalized_power")
-        print(f"[Agent Pipeline] Model Ready. Validation Metrics: RMSE={metrics['rmse']}, MAE={metrics['mae']}, R2={metrics['r2_score']}")
+    @staticmethod
+    def _trace(trace, step, action, reason, **details):
+        trace.append(dict(step=step, action=action, reason=reason, details=details))
 
-    def run_forecast_cycle(self, target_date: str = "2026-02-14", horizon_hours: int = 48, turbine_id: str = "turbine_1") -> dict:
-        """
-        Executes complete Agentic Loop for a single forecast run.
-        """
+    @staticmethod
+    def _validate_weather(frame, start, hours):
+        required = ["time", "wind_speed_10m", "temperature_2m", "surface_pressure"]
+        if any(col not in frame for col in required):
+            raise ValueError("Weather response is missing required columns")
+        frame = frame.copy()
+        frame["time"] = pd.to_datetime(frame["time"], errors="raise")
+        expected = pd.date_range(start, periods=hours, freq="h")
+        frame = frame.loc[frame["time"].isin(expected)].sort_values("time").reset_index(drop=True)
+        if not frame["time"].equals(pd.Series(expected)):
+            raise ValueError("Weather must contain each requested hour exactly once")
+        numeric = required[1:] + (["wind_speed_100m"] if "wind_speed_100m" in frame else [])
+        if not np.isfinite(frame[numeric].to_numpy(dtype=float)).all():
+            raise ValueError("Weather contains non-finite values")
+        if (frame["wind_speed_10m"] < 0).any() or (frame["surface_pressure"] <= 0).any():
+            raise ValueError("Weather contains invalid wind or pressure")
+        if "wind_speed_100m" in frame and (frame["wind_speed_100m"] < 0).any():
+            raise ValueError("Weather contains negative hub-height wind")
+        if (frame["temperature_2m"] <= -273.15).any():
+            raise ValueError("Weather temperature must exceed absolute zero")
+        return frame
+
+    def run_forecast_cycle(self, target_date="2026-02-14", horizon_hours=48,
+                           turbine_id="turbine_1", refresh_weather=False):
         if turbine_id in ("all", "both", "cluster"):
             turbine_id = "farm"
-        turbine = TURBINES.get(turbine_id, TURBINES["turbine_1"])
-        lat, lon = turbine["lat"], turbine["lon"]
-        capacity_mw = float(turbine.get("rated_mw", 2.5))
+        if turbine_id not in TURBINES:
+            raise ValueError("Unknown turbine_id")
+        start = datetime.strptime(target_date, "%Y-%m-%d")
+        if not isinstance(horizon_hours, int) or not 1 <= horizon_hours <= 168:
+            raise ValueError("horizon_hours must be between 1 and 168")
+        with self._lock:
+            cutoff = min(pd.Timestamp(start), pd.Timestamp("2026-02-01"))
+            if cutoff != getattr(self, "_training_cutoff", pd.Timestamp("2026-02-01")):
+                self.training_metadata = self.model.train(self.history, cutoff=cutoff)
+                self._training_cutoff = cutoff
+            if turbine_id == "farm":
+                return self._combine_farm([self._run_single(target_date, horizon_hours, tid, refresh_weather)
+                                           for tid in ("turbine_1", "turbine_2")])
+            return self._run_single(target_date, horizon_hours, turbine_id, refresh_weather)
 
-        dt_start = datetime.strptime(target_date, "%Y-%m-%d")
-        dt_end = dt_start + timedelta(hours=horizon_hours - 1)
-        end_date_str = dt_end.strftime("%Y-%m-%d")
-
-        # Step 1: Agent retrieves weather forecasts by turbine coordinates
-        raw_weather = self.weather_tool.fetch_forecast(lat, lon, target_date, end_date_str)
-        weather_slice = raw_weather.head(horizon_hours).copy().reset_index(drop=True)
-
-        # Step 2: Aerodynamic physics enrichment (IEC 61400-12 curve + air density + Hellman shear)
-        enriched = WindTurbinePhysics.enrich_features(weather_slice)
-
-        # Step 3: Multi-model inference
-        # 3a. Physics-Informed LightGBM Model
-        predicted_power = self.model.predict(enriched)
-        enriched["predicted_power"] = predicted_power
-
-        # 3b. Pure Aerodynamic Physical Baseline
-        physics_power = enriched["theoretical_power"].values
-
-        # 3c. Persistence Baseline (Hour 0 level held constant across horizon)
-        h0_power = float(predicted_power[0]) if len(predicted_power) > 0 else 0.5
-        persistence_power = np.full(len(predicted_power), h0_power)
-
-        # Step 4: Agentic Reasoning & Dispatcher Audit
-        audit = DispatcherAgentReasoner.audit_forecast(enriched, target_date, capacity_mw=capacity_mw)
-
-        # Step 5: Benchmark metrics calculation (MAE, RMSE, Skill Score)
-        # Skill Score relative to Persistence: 1 - (MAE_model / MAE_persistence)
-        mae_model_vs_phys = float(np.mean(np.abs(predicted_power - physics_power)))
-        mae_model_vs_pers = float(np.mean(np.abs(predicted_power - persistence_power)))
-        mae_phys_vs_pers = float(np.mean(np.abs(physics_power - persistence_power)))
-        
-        # Skill score indicates how much better ML is over naive flat persistence
-        skill_score = round(max(0.0, 1.0 - (mae_model_vs_phys / (mae_phys_vs_pers + 1e-6))), 3)
-
-        benchmark = {
-            "model_type": "Physics-Informed LightGBM (Hybrid)",
-            "baseline_physical": "IEC 61400-12 Air-Density Scaled Curve",
-            "baseline_naive": "Flat Persistence (H0 constant)",
-            "mae_model_vs_physics": round(mae_model_vs_phys, 4),
-            "mae_persistence": round(mae_model_vs_pers, 4),
-            "skill_score_index": skill_score,
-            "data_provenance": enriched["data_source"].iloc[0] if "data_source" in enriched.columns else "OPEN_METEO"
-        }
-
-        # Structure hourly timeline for dashboard and API
+    def _run_single(self, target_date, hours, turbine_id, refresh_weather):
+        turbine = TURBINES[turbine_id]
+        capacity = float(turbine["rated_mw"])
+        start = datetime.strptime(target_date, "%Y-%m-%d")
+        end_date = (start + timedelta(hours=hours - 1)).strftime("%Y-%m-%d")
+        trace = []
+        self._trace(trace, "plan", "fetch_validate_predict_audit", "Produce a complete hourly forecast", hours=hours)
+        for attempt in range(2):
+            try:
+                raw = self.weather_tool.fetch_forecast(turbine["lat"], turbine["lon"], target_date,
+                                                       end_date, force_refresh=refresh_weather or attempt > 0)
+                frame = self._validate_weather(raw, start, hours)
+                self._trace(trace, "retrieve", "weather_accepted", "Complete finite hourly weather grid", attempt=attempt + 1)
+                break
+            except (ValueError, KeyError, TypeError) as exc:
+                self._trace(trace, "validate", "refresh_weather", str(exc), attempt=attempt + 1)
+                if attempt == 1:
+                    raise ValueError("Weather validation failed after one refresh") from exc
+        fingerprint = hashlib.sha256(frame.to_json(date_format="iso").encode()).hexdigest()
+        key = (target_date, hours, turbine_id)
+        previous = self._runs.get(key)
+        changed = previous is not None and previous["fingerprint"] != fingerprint
+        revision = previous["revision"] + int(changed) if previous else 1
+        self._trace(trace, "update", "recalculate" if changed else "calculate",
+                    "Weather inputs changed" if changed else "Initial or unchanged weather inputs",
+                    input_changed=changed, revision=revision, fingerprint=fingerprint)
+        enriched = WindTurbinePhysics.enrich_features(frame)
+        self._trace(trace, "prepare", "enrich_physics", "Air density, hub-height wind and generic power curve")
+        model_kind = "LightGBM with physical features"
+        for attempt in range(2):
+            try:
+                predicted = (np.asarray(self.model.predict(enriched), dtype=float) if attempt == 0
+                             else enriched["theoretical_power"].to_numpy(dtype=float).copy())
+                if predicted.shape != (hours,) or not np.isfinite(predicted).all():
+                    raise ValueError("Model produced incomplete or non-finite predictions")
+                if ((predicted < 0) | (predicted > 1)).any():
+                    raise ValueError("Model predictions exceed normalized power bounds")
+                break
+            except Exception as exc:
+                if attempt == 1:
+                    raise ValueError("Both ML and physics inference failed") from exc
+                model_kind = "Generic physical curve (ML fallback)"
+                self._trace(trace, "analyze", "use_physics_fallback", type(exc).__name__ + ": " + str(exc))
+        wind = enriched["wind_speed_100m"].to_numpy()
+        stopped = (wind >= WindTurbinePhysics.V_CUT_OUT) | (wind < WindTurbinePhysics.V_CUT_IN)
+        revised = int(np.count_nonzero(predicted[stopped]))
+        predicted[stopped] = 0.0
+        enriched["predicted_power"] = predicted
+        self._trace(trace, "forecast", "apply_operating_bounds", "Enforce cut-in and cut-out limits", revised_hours=revised)
+        audit = DispatcherAgentReasoner.audit_forecast(enriched, target_date, capacity_mw=capacity)
+        self._trace(trace, "analyze", "dispatcher_audit", "Rule-based weather and ramp checks",
+                    events=len(audit["events"]), status=audit["agent_status"])
+        if revised:
+            self._trace(trace, "revise", "rechecked_after_correction", "Audit uses the corrected generation schedule")
+        source = str(frame["data_source"].iloc[0]) if "data_source" in frame else "UNKNOWN"
+        training_source = self.training_metadata.get("data_source", "UNVERIFIED")
+        physics = enriched["theoretical_power"].to_numpy()
         timeline = []
         for idx, row in enriched.iterrows():
-            p_pred = float(row.get("predicted_power", 0.0))
-            p_phys = float(row.get("theoretical_power", 0.0))
-            p_pers = float(persistence_power[idx])
-
             timeline.append({
-                "hour_index": int(idx),
-                "timestamp": str(row.get("time", f"{target_date} {idx:02d}:00")),
-                "wind_speed_10m": round(float(row.get("wind_speed_10m", 0.0)), 2),
-                "wind_speed_100m": round(float(row.get("wind_speed_100m", 0.0)), 2),
-                "temperature_2m": round(float(row.get("temperature_2m", 0.0)), 1),
-                "air_density_kg_m3": round(float(row.get("air_density", 1.225)), 4),
-                "theoretical_power": round(p_phys, 4),
-                "predicted_power": round(p_pred, 4),
-                "predicted_mwh": round(p_pred * capacity_mw, 3),
-                "physics_mwh": round(p_phys * capacity_mw, 3),
-                "persistence_mwh": round(p_pers * capacity_mw, 3)
-            })
-
+                "hour_index": int(idx), "timestamp": pd.Timestamp(row["time"]).isoformat(),
+                "wind_speed_10m": round(float(row["wind_speed_10m"]), 2),
+                "wind_speed_100m": round(float(row["wind_speed_100m"]), 2),
+                "temperature_2m": round(float(row["temperature_2m"]), 1),
+                "air_density_kg_m3": round(float(row["air_density"]), 4),
+                "theoretical_power": round(float(physics[idx]), 4),
+                "predicted_power": round(float(predicted[idx]), 4),
+                "predicted_mwh": round(float(predicted[idx]) * capacity, 6),
+                "physics_mwh": round(float(physics[idx]) * capacity, 6),
+                "persistence_mwh": None, "data_source": source})
+        self._trace(trace, "finalize", "publish_forecast", "No observed test generation: accuracy and savings are not evaluated")
+        self._runs[key] = {"fingerprint": fingerprint, "revision": revision}
+        if len(self._runs) > 512:
+            del self._runs[next(iter(self._runs))]
         return {
             "status": "SUCCESS",
             "metadata": {
-                "turbine_id": turbine_id,
-                "turbine_name": turbine["name"],
-                "rated_capacity_mw": capacity_mw,
-                "coordinates": f"{lat:.6f}, {lon:.6f}",
-                "target_date": target_date,
-                "horizon_hours": horizon_hours,
-                "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            },
+                "run_id": str(uuid4()), "turbine_id": turbine_id, "turbine_name": turbine["name"],
+                "rated_capacity_mw": capacity, "coordinates": f"{turbine['lat']:.6f}, {turbine['lon']:.6f}",
+                "target_date": target_date, "horizon_hours": hours, "timezone": "Asia/Almaty",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "scenario_issue_time": (start - timedelta(hours=1)).isoformat(),
+                "forecast_issue_time_verified": False,
+                "mode": "RETROSPECTIVE_SCENARIO" if start.date() < datetime.now().date() else "FORECAST_SCENARIO",
+                "input_fingerprint": fingerprint, "input_changed": changed, "revision": revision,
+                "training_data_source": training_source, "training": self.training_metadata,
+                "weather": {field: frame.attrs.get(field) for field in (
+                    "weather_kind", "hub_wind_method", "fallback_reason", "cache_hit", "retrieved_at")},
+                "update_policy": "Recheck inputs on each request; refresh_weather bypasses weather cache"},
             "audit": audit,
-            "benchmark": benchmark,
-            "timeline": timeline
-        }
+            "benchmark": {
+                "model_type": model_kind, "baseline_physical": "Generic density-adjusted turbine curve (not IEC certified)",
+                "baseline_naive": "Unavailable: verified turbine observations required",
+                "mae_model_vs_physics": round(float(np.mean(np.abs(predicted - physics))), 4),
+                "mae_persistence": None, "skill_score_index": None,
+                "evaluation_status": "UNVERIFIED_NO_ACTUALS", "data_provenance": source,
+                "training_data_source": training_source},
+            "agent_trace": trace, "timeline": timeline}
 
-    def run_full_february_simulation(self, turbine_id: str = "farm") -> dict:
-        """
-        Backtests the complete test month (Feb 1 - Feb 28, 2026) day-by-day.
-        Reproduces the exact task requirement: forecast 24-48h for each day.
-        """
-        results_by_day = {}
-        total_monthly_mwh = 0.0
-        total_physics_mwh = 0.0
+    def _combine_farm(self, parts):
+        """Sum independent turbine forecasts instead of using midpoint weather."""
+        first, second = parts
+        timeline = []
+        for a, b in zip(first["timeline"], second["timeline"]):
+            row = dict(a)
+            for field in ("wind_speed_10m", "wind_speed_100m", "temperature_2m", "air_density_kg_m3", "theoretical_power", "predicted_power"):
+                row[field] = (a[field] + b[field]) / 2.0
+            for field in ("predicted_mwh", "physics_mwh"):
+                row[field] = round(a[field] + b[field], 6)
+            row["data_source"] = " + ".join(sorted({a["data_source"], b["data_source"]}))
+            timeline.append(row)
+        frame = pd.DataFrame(timeline).rename(columns={"timestamp": "time", "air_density_kg_m3": "air_density"})
+        audit = DispatcherAgentReasoner.audit_forecast(frame, first["metadata"]["target_date"], capacity_mw=5.0)
+        audit["events"] = [dict(event, turbine_id=part["metadata"]["turbine_id"]) for part in parts for event in part["audit"]["events"]]
+        for key in ("storm_hours", "icing_hours", "high_ramp_hours"):
+            audit["alerts"][key] = sorted({h for part in parts for h in part["audit"]["alerts"][key]})
+        audit["alerts"]["storm_cutout_detected"] = bool(audit["alerts"]["storm_hours"])
+        audit["alerts"]["icing_risk_detected"] = bool(audit["alerts"]["icing_hours"])
+        audit["agent_status"] = ("CRITICAL_SHUTDOWN" if audit["alerts"]["storm_hours"] else
+                                  "ADVISORY_ATTENTION" if audit["events"] else "VERIFIED_STABLE")
+        for lang in ("ru", "kz"):
+            audit[f"dispatcher_brief_{lang}"] = "\n\n".join(part["metadata"]["turbine_name"] + "\n" + part["audit"][f"dispatcher_brief_{lang}"] for part in parts)
+        meta = dict(first["metadata"], run_id=str(uuid4()), turbine_id="farm", turbine_name=TURBINES["farm"]["name"], rated_capacity_mw=5.0,
+                    weather={part["metadata"]["turbine_id"]: part["metadata"]["weather"] for part in parts},
+                    coordinates="; ".join(part["metadata"]["coordinates"] for part in parts),
+                    input_changed=any(part["metadata"]["input_changed"] for part in parts),
+                    revision=max(part["metadata"]["revision"] for part in parts),
+                    input_fingerprint=hashlib.sha256("".join(part["metadata"]["input_fingerprint"] for part in parts).encode()).hexdigest())
+        benchmark = dict(first["benchmark"], data_provenance=" + ".join(sorted({part["benchmark"]["data_provenance"] for part in parts})),
+                         model_type=" + ".join(sorted({part["benchmark"]["model_type"] for part in parts})),
+                         mae_model_vs_physics=round(float(np.mean(np.abs(frame["predicted_power"] - frame["theoretical_power"]))), 4))
+        return {"status": "SUCCESS", "metadata": meta, "audit": audit, "benchmark": benchmark, "timeline": timeline,
+                "agent_trace": [dict(event, turbine_id=part["metadata"]["turbine_id"]) for part in parts for event in part["agent_trace"]],
+                "turbine_forecasts": parts}
 
+    def run_full_february_simulation(self, turbine_id="farm"):
+        days = {}
         for day in range(1, 29):
-            date_str = f"2026-02-{day:02d}"
-            day_res = self.run_forecast_cycle(target_date=date_str, horizon_hours=24, turbine_id=turbine_id)
-            daily_mwh = day_res["audit"]["total_generation_mwh"]
-            daily_phys = day_res["audit"].get("physics_generation_mwh", daily_mwh)
-            total_monthly_mwh += daily_mwh
-            total_physics_mwh += daily_phys
-
-            results_by_day[date_str] = {
-                "generation_mwh": daily_mwh,
-                "physics_mwh": daily_phys,
-                "capacity_factor": day_res["audit"]["capacity_factor_pct"],
-                "status": day_res["audit"]["agent_status"],
-                "events_count": len(day_res["audit"].get("events", []))
-            }
-
-        return {
-            "month": "February 2026",
-            "turbine_id": turbine_id,
-            "total_days": 28,
-            "total_monthly_mwh": round(total_monthly_mwh, 2),
-            "total_physics_mwh": round(total_physics_mwh, 2),
-            "mean_daily_mwh": round(total_monthly_mwh / 28.0, 2),
-            "daily_breakdown": results_by_day
-        }
+            date = f"2026-02-{day:02d}"
+            result = self.run_forecast_cycle(date, 24, turbine_id)
+            days[date] = {"generation_mwh": sum(row["predicted_mwh"] for row in result["timeline"]),
+                          "physics_mwh": sum(row["physics_mwh"] for row in result["timeline"]),
+                          "capacity_factor": result["audit"]["capacity_factor_pct"],
+                          "status": result["audit"]["agent_status"], "events_count": len(result["audit"]["events"]),
+                          "data_source": result["benchmark"]["data_provenance"]}
+        total = sum(day["generation_mwh"] for day in days.values())
+        return {"month": "February 2026", "turbine_id": turbine_id, "total_days": 28,
+                "total_monthly_mwh": round(total, 2), "total_physics_mwh": round(sum(day["physics_mwh"] for day in days.values()), 2),
+                "mean_daily_mwh": round(total / 28, 2), "daily_breakdown": days,
+                "evaluation_status": "RETROSPECTIVE_SCENARIO_NOT_ACCURACY_BACKTEST", "forecast_issue_time_verified": False}

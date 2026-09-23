@@ -1,6 +1,6 @@
 [project]
 name = "samruk-wind-agent"
-version = "0.2.0"
+version = "0.3.0"
 description = "Agentic AI for Wind Power Plant Generation Forecasting (Samruk-Kazyna - Shelek WF)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,9 +13,18 @@ dependencies = [
     "scikit-learn>=1.5.0",
     "lightgbm>=4.4.0",
     "requests>=2.32.0",
+    "httpx>=0.27.0",
+    "joblib>=1.4.0",
     "python-dotenv>=1.0.0",
     "pytest>=8.3.0"
 ]
+
+[project.scripts]
+wind-agent = "backend.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
 
 [build-system]
 requires = ["hatchling"]

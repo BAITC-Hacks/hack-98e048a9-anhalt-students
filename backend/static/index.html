@@ -180,9 +180,15 @@
             <h3 class="text-sm font-semibold text-slate-200">Почасовой профиль генерации и мультимодельное сравнение</h3>
             <p class="text-xs text-slate-400">Сравнение: Physics-Informed LightGBM vs Физика IEC vs Навстречу (Persistence)</p>
           </div>
-          <button onclick="downloadCSV()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs rounded-lg flex items-center gap-1.5 transition">
-            <i data-lucide="download" class="w-3.5 h-3.5"></i> Экспорт CSV
-          </button>
+          <div class="flex items-center gap-2">
+            <button onclick="downloadCSV()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs rounded-lg flex items-center gap-1.5 transition">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i> Суточный CSV
+            </button>
+            <a href="/api/export/submission" class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-400 text-xs font-medium rounded-lg flex items-center gap-1.5 transition">
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Сабмишн 28 дней (1344 ч)
+            </a>
+          </div>
+
         </div>
         
         <div class="flex-1 min-h-[380px] relative">

@@ -106,6 +106,22 @@ def export_forecast_csv(
     response.headers["Content-Disposition"] = f"attachment; filename=wind_forecast_{turbine_id}_{target_date}.csv"
     return response
 
+@app.get("/api/export/submission")
+def export_submission_csv():
+    """
+    Downloads full 28-day (1,344 hours) test forecast CSV for the entire February 2026.
+    """
+    csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "submission_forecast_february_2026.csv")
+    if not os.path.exists(csv_path):
+        from scripts.run_february_test import run_test
+        run_test()
+    with open(csv_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    response = StreamingResponse(io.StringIO(content), media_type="text/csv")
+    response.headers["Content-Disposition"] = "attachment; filename=submission_forecast_february_2026.csv"
+    return response
+
+
 @app.get("/", response_class=HTMLResponse)
 def serve_dashboard():
     """
